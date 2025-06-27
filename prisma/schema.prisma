@@ -1,0 +1,187 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Doctor {
+  id             Int            @id @default(autoincrement())
+  firstName      String
+  lastName       String
+  password       String
+  specialization String
+  avatar         String?
+  bio            String?
+  licenseNumber  String?
+  yearsOfExperience Int?
+  education      String?
+  certifications String[]
+  languages      String[]
+  contactInfo    DoctorContactInfo? @relation(fields: [contactInfoId], references: [id])
+  contactInfoId  Int?              @unique
+  availability   DoctorAvailability? @relation(fields: [availabilityId], references: [id])
+  availabilityId Int?              @unique
+  preferences    DoctorPreferences? @relation(fields: [preferencesId], references: [id])
+  preferencesId  Int?              @unique
+  stats          DoctorStats?     @relation(fields: [statsId], references: [id])
+  statsId        Int?              @unique
+  email          String         @unique
+  appointments   Appointment[]
+  services       Service[]      @relation("DoctorServices")
+}
+
+model DoctorContactInfo {
+  id          Int    @id @default(autoincrement())
+  phone       String
+  officeAddress String
+  city        String
+  state       String
+  zipCode     String
+  country     String
+  doctor      Doctor? @relation
+}
+
+model DoctorAvailability {
+  id                Int    @id @default(autoincrement())
+  mondayStart       String
+  mondayEnd         String
+  tuesdayStart      String
+  tuesdayEnd        String
+  wednesdayStart    String
+  wednesdayEnd      String
+  thursdayStart     String
+  thursdayEnd       String
+  fridayStart       String
+  fridayEnd         String
+  saturdayStart     String
+  saturdayEnd       String
+  sundayStart       String
+  sundayEnd         String
+  consultationDuration Int
+  breakDuration     Int
+  doctor            Doctor? @relation
+}
+
+model DoctorPreferences {
+  id                  Int     @id @default(autoincrement())
+  emailNotifications  Boolean @default(true)
+  smsNotifications    Boolean @default(false)
+  appointmentReminders Boolean @default(true)
+  patientUpdates      Boolean @default(true)
+  systemUpdates       Boolean @default(true)
+  language            String  @default("en")
+  timezone            String  @default("America/New_York")
+  theme               String  @default("light")
+  doctor              Doctor? @relation
+}
+
+model DoctorStats {
+  id                  Int      @id @default(autoincrement())
+  totalPatients       Int      @default(0)
+  totalAppointments   Int      @default(0)
+  upcomingAppointments Int     @default(0)
+  completedAppointments Int     @default(0)
+  averageRating       Float    @default(0)
+  totalReviews        Int      @default(0)
+  joinedDate          DateTime
+  doctor              Doctor?  @relation
+}
+
+model Patient {
+  id             Int              @id @default(autoincrement())
+  firstName      String
+  lastName       String
+  dob            DateTime
+  email          String           @unique
+  password       String
+  avatar         String?
+  bio            String?
+  address        Address?         @relation(fields: [addressId], references: [id])
+  addressId      Int?             @unique
+  emergencyContact EmergencyContact? @relation(fields: [emergencyContactId], references: [id])
+  emergencyContactId Int?           @unique
+  medicalInfo    MedicalInfo?     @relation(fields: [medicalInfoId], references: [id])
+  medicalInfoId  Int?              @unique
+  preferences    Preferences?     @relation(fields: [preferencesId], references: [id])
+  preferencesId  Int?              @unique
+  stats          Stats?           @relation(fields: [statsId], references: [id])
+  statsId        Int?              @unique
+  appointments   Appointment[]
+}
+
+model Address {
+  id       Int    @id @default(autoincrement())
+  street   String
+  city     String
+  county   String
+  postcode String
+  country  String
+  patient  Patient?
+}
+
+model EmergencyContact {
+  id           Int    @id @default(autoincrement())
+  name         String
+  relationship String
+  phone        String
+  patient      Patient?
+}
+
+model MedicalInfo {
+  id          Int      @id @default(autoincrement())
+  bloodType   String
+  allergies   String[]
+  conditions  String[]
+  medications String[]
+  patient     Patient?
+}
+
+model Preferences {
+  id               Int     @id @default(autoincrement())
+  notificationsEmail Boolean @default(true)
+  notificationsSms   Boolean @default(false)
+  notificationsPush  Boolean @default(true)
+  notificationsReminders Boolean @default(true)
+  profileVisible    Boolean @default(true)
+  shareData         Boolean @default(false)
+  language          String  @default("en")
+  timezone          String  @default("Europe/London")
+  patient           Patient?
+}
+
+model Stats {
+  id                  Int      @id @default(autoincrement())
+  totalAppointments    Int      @default(0)
+  upcomingAppointments Int      @default(0)
+  completedAppointments Int     @default(0)
+  memberSince          DateTime
+  patient              Patient?
+}
+
+model Service {
+  id       Int       @id @default(autoincrement())
+  name     String
+  description String
+  doctors  Doctor[]  @relation("DoctorServices")
+  appointments Appointment[]
+}
+
+model Appointment {
+  id         Int       @id @default(autoincrement())
+  datetime   DateTime
+  status     String    @default("Scheduled")
+  notes      String?   // Added notes field, optional
+  doctor     Doctor    @relation(fields: [doctorId], references: [id])
+  doctorId   Int
+  patient    Patient   @relation(fields: [patientId], references: [id])
+  patientId  Int
+  service    Service   @relation(fields: [serviceId], references: [id])
+  serviceId  Int
+}
