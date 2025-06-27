@@ -6,7 +6,8 @@ export async function GET() {
     const doctors = await prisma.doctor.findMany({
       select: {
         id: true,
-        name: true,
+        firstName: true,
+        lastName: true,
         specialization: true,
         email: true,
         services: {

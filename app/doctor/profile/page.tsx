@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useActionState } from "react"
+import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -125,6 +126,7 @@ type DoctorProfile = {
 }
 
 export default function DoctorProfilePage() {
+  const { user, loading } = useAuth()
   const [doctorData, setDoctorData] = useState<DoctorProfile | null>(null)
   const [isEditingProfessional, setIsEditingProfessional] = useState(false)
   const [isEditingContact, setIsEditingContact] = useState(false)
@@ -139,7 +141,8 @@ export default function DoctorProfilePage() {
   // Form state for professional info update
   const [professionalState, professionalAction, isProfessionalPending] = useActionState(
     async (prevState: any, formData: FormData) => {
-      const result = await updateDoctorProfessional(doctorId, formData)
+      if (!user) return { success: false, message: "User not authenticated" }
+      const result = await updateDoctorProfessional(user.id, formData)
       if (result.success) {
         setSuccessMessage("Professional information updated successfully!")
         setIsEditingProfessional(false)
@@ -153,7 +156,8 @@ export default function DoctorProfilePage() {
   // Form state for contact info update
   const [contactState, contactAction, isContactPending] = useActionState(
     async (prevState: any, formData: FormData) => {
-      const result = await updateDoctorContact(doctorId, formData)
+      if (!user) return { success: false, message: "User not authenticated" }
+      const result = await updateDoctorContact(user.id, formData)
       if (result.success) {
         setSuccessMessage("Contact information updated successfully!")
         setIsEditingContact(false)
@@ -167,7 +171,8 @@ export default function DoctorProfilePage() {
   // Form state for availability update
   const [availabilityState, availabilityAction, isAvailabilityPending] = useActionState(
     async (prevState: any, formData: FormData) => {
-      const result = await updateDoctorAvailability(doctorId, formData)
+      if (!user) return { success: false, message: "User not authenticated" }
+      const result = await updateDoctorAvailability(user.id, formData)
       if (result.success) {
         setSuccessMessage("Availability updated successfully!")
         setIsEditingAvailability(false)
@@ -181,7 +186,8 @@ export default function DoctorProfilePage() {
   // Form state for preferences update
   const [preferencesState, preferencesAction, isPreferencesPending] = useActionState(
     async (prevState: any, formData: FormData) => {
-      const result = await updateDoctorPreferences(doctorId, formData)
+      if (!user) return { success: false, message: "User not authenticated" }
+      const result = await updateDoctorPreferences(user.id, formData)
       if (result.success) {
         setSuccessMessage("Preferences updated successfully!")
         setIsEditingPreferences(false)
@@ -195,7 +201,8 @@ export default function DoctorProfilePage() {
   // Form state for password update
   const [passwordState, passwordAction, isPasswordPending] = useActionState(
     async (prevState: any, formData: FormData) => {
-      const result = await updateDoctorPassword(doctorId, formData)
+      if (!user) return { success: false, message: "User not authenticated" }
+      const result = await updateDoctorPassword(user.id, formData)
       if (result.success) {
         setSuccessMessage("Password updated successfully!")
         // Reset form
@@ -207,12 +214,11 @@ export default function DoctorProfilePage() {
     { success: false, message: "" },
   )
 
-  // Mock doctor ID - in real app, get from auth context
-  const doctorId = 1
-
   useEffect(() => {
-    loadDoctorProfile()
-  }, [])
+    if (user && !loading) {
+      loadDoctorProfile()
+    }
+  }, [user, loading])
 
   useEffect(() => {
     if (successMessage) {
@@ -222,9 +228,14 @@ export default function DoctorProfilePage() {
   }, [successMessage])
 
   const loadDoctorProfile = async () => {
+    if (!user) {
+      setError("User not authenticated")
+      setIsLoading(false)
+      return
+    }
     try {
       setIsLoading(true)
-      const profile = await getDoctorProfile(doctorId)
+      const profile = await getDoctorProfile(user.id)
       setDoctorData(profile)
       setError(null)
     } catch (err) {
@@ -403,9 +414,9 @@ export default function DoctorProfilePage() {
             <AlertCircle className="h-5 w-5 text-red-600" />
             <p className="text-red-600 font-medium">{currentFormState.message}</p>
           </div>
-          {currentFormState.errors && (
+          {Array.isArray((currentFormState as any).errors) && (
             <ul className="text-red-600 text-sm ml-7">
-              {currentFormState.errors.map((error: string, index: number) => (
+              {(currentFormState as any).errors.map((error: string, index: number) => (
                 <li key={index}>• {error}</li>
               ))}
             </ul>

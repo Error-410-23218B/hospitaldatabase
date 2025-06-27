@@ -395,6 +395,8 @@ export async function updateDoctorPreferences(doctorId: number, formData: FormDa
   }
 }
 
+import bcrypt from "bcrypt"
+
 export async function updateDoctorPassword(doctorId: number, formData: FormData) {
   try {
     const currentPassword = formData.get("currentPassword") as string
@@ -423,17 +425,22 @@ export async function updateDoctorPassword(doctorId: number, formData: FormData)
       return { success: false, message: "Doctor not found" }
     }
 
-    // In production, you would hash passwords and compare hashes
-    // For now, we'll do a simple comparison (NOT SECURE)
-    if (doctor.password !== currentPassword) {
+    // Verify current password using bcrypt
+    const isMatch = await bcrypt.compare(currentPassword, doctor.password)
+    if (!isMatch) {
       return { success: false, message: "Current password is incorrect" }
     }
 
-    // Update password (in production, hash the new password)
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10)
+
+    // Update password in database
     await prisma.doctor.update({
       where: { id: doctorId },
-      data: { password: newPassword },
+      data: { password: hashedPassword },
     })
+
+    revalidatePath("/doctor/profile")
 
     return { success: true, message: "Password updated successfully" }
   } catch (error) {

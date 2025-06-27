@@ -37,11 +37,15 @@ import { format } from "date-fns";
 
 interface Appointment {
   id: number;
-  doctor: string;
+  doctor: {
+    id: number;
+    firstName: string;
+    lastName: string;
+    specialization: string;
+  };
   service: string;
   datetime: string;
   status: string;
-  specialty: string;
   priority: number;
 }
 
@@ -50,7 +54,7 @@ type SortOption = "priority" | "date" | "doctor" | "service";
 export default function AppointmentsPage() {
   const router = useRouter();
   const [user, setUser] = useState<{ id: number } | null>(null);
-  const [doctors, setDoctors] = useState<{ id: number; name: string; specialization: string }[]>([]);
+  const [doctors, setDoctors] = useState<{ id: number; firstName: string; lastName: string; specialization: string }[]>([]);
   const [services, setServices] = useState<{ id: number; name: string }[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [isLoadingAppointments, setIsLoadingAppointments] = useState(true);
@@ -77,16 +81,16 @@ export default function AppointmentsPage() {
   // Function to open edit dialog and prefill data
   const openEditDialog = (appointment: Appointment) => {
     setEditAppointmentId(appointment.id);
-    // Find doctor id by name
-    const doctor = doctors.find(d => d.name === appointment.doctor);
+    // Find doctor id by id
+    const doctor = doctors.find(d => d.id === appointment.doctor.id);
     setEditSelectedDoctor(doctor ? doctor.id.toString() : "");
-    // Find service id by name
-    const service = services.find(s => s.name === appointment.service);
+    // Find service id by id
+    const service = services.find(s => s.id.toString() === appointment.service);
     setEditSelectedService(service ? service.id.toString() : "");
     // Set date and time from datetime string
     const dt = new Date(appointment.datetime);
     setEditSelectedDate(dt.toISOString().split("T")[0]);
-    setEditSelectedTime(dt.toTimeString().slice(0,5));
+    setEditSelectedTime(dt.toTimeString().slice(0, 5));
     setEditSelectedStatus(appointment.status);
     setIsEditDialogOpen(true);
   };
@@ -138,11 +142,15 @@ export default function AppointmentsPage() {
         // Map backend appointments to local state format
         const mappedAppointments = data.appointments.map((apt: any, index: number) => ({
           id: apt.id,
-          doctor: apt.doctor.name,
+          doctor: {
+            id: apt.doctor.id,
+            firstName: apt.doctor.firstName,
+            lastName: apt.doctor.lastName,
+            specialization: apt.doctor.specialization,
+          },
           service: apt.service.name,
           datetime: apt.datetime,
           status: apt.status.toLowerCase(),
-          specialty: apt.doctor.specialization,
           priority: index + 1,
         }));
 
@@ -196,11 +204,15 @@ export default function AppointmentsPage() {
       const updatedData = await updatedRes.json();
       const mappedAppointments = updatedData.appointments.map((apt: any, index: number) => ({
         id: apt.id,
-        doctor: apt.doctor.name,
+        doctor: {
+          id: apt.doctor.id,
+          firstName: apt.doctor.firstName,
+          lastName: apt.doctor.lastName,
+          specialization: apt.doctor.specialization,
+        },
         service: apt.service.name,
         datetime: apt.datetime,
         status: apt.status.toLowerCase(),
-        specialty: apt.doctor.specialty,
         priority: index + 1,
       }));
       setAppointments(mappedAppointments);
@@ -386,7 +398,10 @@ export default function AppointmentsPage() {
           comparison = new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
           break;
         case "doctor":
-          comparison = a.doctor.localeCompare(b.doctor);
+          // Compare by doctor's full name
+          const nameA = `${a.doctor.firstName} ${a.doctor.lastName}`;
+          const nameB = `${b.doctor.firstName} ${b.doctor.lastName}`;
+          comparison = nameA.localeCompare(nameB);
           break;
         case "service":
           comparison = a.service.localeCompare(b.service);
@@ -487,7 +502,7 @@ export default function AppointmentsPage() {
                   {doctors.map((doctor) => (
                     <SelectItem key={doctor.id} value={doctor.id.toString()}>
                       <div className="flex flex-col">
-                        <span>{doctor.name}</span>
+                        <span>{doctor.firstName} {doctor.lastName}</span>
                         <span className="text-sm text-muted-foreground">{doctor.specialization}</span>
                       </div>
                     </SelectItem>
@@ -572,20 +587,20 @@ export default function AppointmentsPage() {
             <div className="space-y-2">
               <Label htmlFor="edit-doctor">Doctor</Label>
               <Select value={editSelectedDoctor} onValueChange={setEditSelectedDoctor}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a doctor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {doctors.map((doctor) => (
-                    <SelectItem key={doctor.id} value={doctor.id.toString()}>
-                      <div className="flex flex-col">
-                        <span>{doctor.name}</span>
-                        <span className="text-sm text-muted-foreground">{doctor.specialization}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <SelectTrigger>
+              <SelectValue placeholder="Select a doctor" />
+            </SelectTrigger>
+            <SelectContent>
+              {doctors.map((doctor) => (
+                <SelectItem key={doctor.id} value={doctor.id.toString()}>
+                  <div className="flex flex-col">
+                    <span>{doctor.firstName} {doctor.lastName}</span>
+                    <span className="text-sm text-muted-foreground">{doctor.specialization}</span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
             </div>
 
             <div className="space-y-2">
@@ -793,11 +808,11 @@ export default function AppointmentsPage() {
                         <div className="space-y-1">
                           <CardTitle className="flex items-center gap-2 text-lg group-hover:text-primary transition-colors duration-200">
                             <User className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-                            {appointment.doctor}
+                          {appointment.doctor.firstName} {appointment.doctor.lastName}
                           </CardTitle>
                           <CardDescription className="flex items-center gap-1">
                             <Stethoscope className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors duration-200" />
-                            {appointment.specialty}
+                            {appointment.doctor.specialization}
                       
                           </CardDescription>
                         </div>

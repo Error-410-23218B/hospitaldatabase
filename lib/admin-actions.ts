@@ -2,104 +2,139 @@
 
 import prisma  from "./prisma"
 import { revalidatePath } from "next/cache"
-import { requireAuth } from "./auth-actions"
+import { z } from "zod"
 
-export async function getDoctorAppointments() {
+// Validation schemas
+const createDoctorSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Valid email is required"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  specialization: z.string().min(1, "Specialization is required"),
+  licenseNumber: z.string().optional(),
+  yearsOfExperience: z.number().min(0).max(50).optional(),
+  bio: z.string().optional(),
+})
+
+const updatePatientSchema = z.object({
+  firstName: z.string().min(1, "First name is required"),
+  lastName: z.string().min(1, "Last name is required"),
+  email: z.string().email("Valid email is required"),
+  dob: z.date(),
+  bio: z.string().optional(),
+  // Address fields
+  street: z.string().optional(),
+  city: z.string().optional(),
+  county: z.string().optional(),
+  postcode: z.string().optional(),
+  country: z.string().optional(),
+  // Emergency contact fields
+  emergencyName: z.string().optional(),
+  emergencyRelationship: z.string().optional(),
+  emergencyPhone: z.string().optional(),
+})
+
+import bcrypt from "bcrypt"
+
+export async function createDoctorAccount(formData: FormData) {
   try {
-    const doctor = await requireAuth()
-
-    const appointments = await prisma.appointment.findMany({
-      where: { doctorId: doctor.id },
-      include: {
-        patient: {
-          include: {
-            address: true,
-            emergencyContact: true,
-            medicalInfo: true,
-          },
-        },
-        service: true,
-      },
-      orderBy: {
-        datetime: "asc",
-      },
-    })
-
-    return appointments
-  } catch (error) {
-    console.error("Error fetching doctor appointments:", error)
-    throw new Error("Failed to fetch appointments")
-  }
-}
-
-export async function updateAppointmentStatus(appointmentId: number, status: string) {
-  try {
-    const doctor = await requireAuth()
-
-    // Verify the appointment belongs to this doctor
-    const appointment = await prisma.appointment.findFirst({
-      where: {
-        id: appointmentId,
-        doctorId: doctor.id,
-      },
-    })
-
-    if (!appointment) {
-      return { success: false, message: "Appointment not found or access denied" }
+    const rawData = {
+      firstName: formData.get("firstName") as string,
+      lastName: formData.get("lastName") as string,
+      email: formData.get("email") as string,
+      password: formData.get("password") as string,
+      specialization: formData.get("specialization") as string,
+      licenseNumber: (formData.get("licenseNumber") as string) || undefined,
+      yearsOfExperience: formData.get("yearsOfExperience")
+        ? Number.parseInt(formData.get("yearsOfExperience") as string)
+        : undefined,
+      bio: (formData.get("bio") as string) || undefined,
     }
 
-    await prisma.appointment.update({
-      where: { id: appointmentId },
-      data: { status },
+    // Validate data
+    const validatedData = createDoctorSchema.parse(rawData)
+
+    // Check if email already exists
+    const existingDoctor = await prisma.doctor.findUnique({
+      where: { email: validatedData.email },
     })
 
-    revalidatePath("/admin")
-    return { success: true, message: `Appointment ${status.toLowerCase()} successfully` }
-  } catch (error) {
-    console.error("Error updating appointment status:", error)
-    return { success: false, message: "Failed to update appointment status" }
-  }
-}
+    if (existingDoctor) {
+      return { success: false, message: "Email already exists" }
+    }
 
-export async function scheduleAppointment(formData: FormData) {
-  try {
-    const doctor = await requireAuth()
+    // Hash password
+    const hashedPassword = await bcrypt.hash(validatedData.password, 10)
 
-    const patientId = Number.parseInt(formData.get("patientId") as string)
-    const serviceId = Number.parseInt(formData.get("serviceId") as string)
-    const datetime = new Date(formData.get("datetime") as string)
-    const notes = formData.get("notes") as string
-
-    await prisma.appointment.create({
+    // Create doctor account
+    const doctor = await prisma.doctor.create({
       data: {
-        patientId,
-        doctorId: doctor.id,
-        serviceId,
-        datetime,
-        status: "Scheduled",
-        notes: notes || null,
+        firstName: validatedData.firstName,
+        lastName: validatedData.lastName,
+        email: validatedData.email,
+        password: hashedPassword,
+        specialization: validatedData.specialization,
+        licenseNumber: validatedData.licenseNumber,
+        yearsOfExperience: validatedData.yearsOfExperience,
+        bio: validatedData.bio,
       },
     })
 
-    revalidatePath("/admin")
-    return { success: true, message: "Appointment scheduled successfully" }
+    // Create default stats
+    await prisma.doctorStats.create({
+      data: {
+        doctor: { connect: { id: doctor.id } },
+        joinedDate: new Date(),
+      },
+    })
+
+    revalidatePath("/administrator")
+    return { success: true, message: "Doctor account created successfully" }
   } catch (error) {
-    console.error("Error scheduling appointment:", error)
-    return { success: false, message: "Failed to schedule appointment" }
+    console.error("Error creating doctor account:", error)
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        message: "Validation error",
+        errors: error.errors.map((e) => `${e.path.join(".")}: ${e.message}`),
+      }
+    }
+    return { success: false, message: "Failed to create doctor account" }
   }
 }
 
-export async function getAllPatients() {
+export async function getAllDoctors() {
   try {
-    await requireAuth() // Ensure doctor is authenticated
-
-    const patients = await prisma.patient.findMany({
+    const doctors = await prisma.doctor.findMany({
       select: {
         id: true,
         firstName: true,
         lastName: true,
         email: true,
-        dob: true,
+        specialization: true,
+        avatar: true,
+        bio: true,
+        licenseNumber: true,
+        yearsOfExperience: true,
+      },
+      orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
+    })
+
+    return doctors
+  } catch (error) {
+    console.error("Error fetching doctors:", error)
+    throw new Error("Failed to fetch doctors")
+  }
+}
+
+export async function getAllPatients() {
+  try {
+    const patients = await prisma.patient.findMany({
+      include: {
+        address: true,
+        emergencyContact: true,
+        medicalInfo: true,
+        stats: true,
       },
       orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     })
@@ -111,25 +146,8 @@ export async function getAllPatients() {
   }
 }
 
-export async function getAllServices() {
-  try {
-    await requireAuth() // Ensure doctor is authenticated
-
-    const services = await prisma.service.findMany({
-      orderBy: { name: "asc" },
-    })
-
-    return services
-  } catch (error) {
-    console.error("Error fetching services:", error)
-    throw new Error("Failed to fetch services")
-  }
-}
-
 export async function getPatientDetails(patientId: number) {
   try {
-    await requireAuth() // Ensure doctor is authenticated
-
     const patient = await prisma.patient.findUnique({
       where: { id: patientId },
       include: {
@@ -161,72 +179,253 @@ export async function getPatientDetails(patientId: number) {
   }
 }
 
-export async function updateAppointment(appointmentId: number, formData: FormData) {
+export async function updatePatientAccount(patientId: number, formData: FormData) {
   try {
-    const doctor = await requireAuth()
+    const rawData = {
+      firstName: formData.get("firstName") as string,
+      lastName: formData.get("lastName") as string,
+      email: formData.get("email") as string,
+      dob: new Date(formData.get("dob") as string),
+      bio: (formData.get("bio") as string) || undefined,
+      // Address data
+      street: (formData.get("street") as string) || undefined,
+      city: (formData.get("city") as string) || undefined,
+      county: (formData.get("county") as string) || undefined,
+      postcode: (formData.get("postcode") as string) || undefined,
+      country: (formData.get("country") as string) || undefined,
+      // Emergency contact data
+      emergencyName: (formData.get("emergencyName") as string) || undefined,
+      emergencyRelationship: (formData.get("emergencyRelationship") as string) || undefined,
+      emergencyPhone: (formData.get("emergencyPhone") as string) || undefined,
+    }
 
-    // Verify the appointment belongs to this doctor
-    const appointment = await prisma.appointment.findFirst({
-      where: {
-        id: appointmentId,
-        doctorId: doctor.id,
+    // Validate data
+    const validatedData = updatePatientSchema.parse(rawData)
+
+    // Get current patient data
+    const currentPatient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      include: {
+        address: true,
+        emergencyContact: true,
       },
     })
 
-    if (!appointment) {
-      return { success: false, message: "Appointment not found or access denied" }
+    if (!currentPatient) {
+      return { success: false, message: "Patient not found" }
     }
 
-    const status = formData.get("status") as string
-    const datetime = formData.get("datetime") ? new Date(formData.get("datetime") as string) : undefined
-    const notes = formData.get("notes") as string
+    // Check if email is being changed and if it already exists
+    if (validatedData.email !== currentPatient.email) {
+      const existingPatient = await prisma.patient.findUnique({
+        where: { email: validatedData.email },
+      })
 
-    const updateData: any = {}
-    if (status) updateData.status = status
-    if (datetime) updateData.datetime = datetime
-    if (notes !== null) updateData.notes = notes || null
+      if (existingPatient) {
+        return { success: false, message: "Email already exists" }
+      }
+    }
 
-    await prisma.appointment.update({
-      where: { id: appointmentId },
-      data: updateData,
+    // Start transaction
+    await prisma.$transaction(async (tx) => {
+      // Update patient basic info
+      await tx.patient.update({
+        where: { id: patientId },
+        data: {
+          firstName: validatedData.firstName,
+          lastName: validatedData.lastName,
+          email: validatedData.email,
+          dob: validatedData.dob,
+          bio: validatedData.bio,
+        },
+      })
+
+      // Handle address
+      if (
+        validatedData.street ||
+        validatedData.city ||
+        validatedData.county ||
+        validatedData.postcode ||
+        validatedData.country
+      ) {
+        const addressData = {
+          street: validatedData.street || currentPatient.address?.street || "",
+          city: validatedData.city || currentPatient.address?.city || "",
+          county: validatedData.county || currentPatient.address?.county || "",
+          postcode: validatedData.postcode || currentPatient.address?.postcode || "",
+          country: validatedData.country || currentPatient.address?.country || "",
+        }
+
+        if (currentPatient.address) {
+          await tx.address.update({
+            where: { id: currentPatient.address.id },
+            data: addressData,
+          })
+        } else {
+          const newAddress = await tx.address.create({
+            data: addressData,
+          })
+          await tx.patient.update({
+            where: { id: patientId },
+            data: { addressId: newAddress.id },
+          })
+        }
+      }
+
+      // Handle emergency contact
+      if (validatedData.emergencyName || validatedData.emergencyRelationship || validatedData.emergencyPhone) {
+        const emergencyContactData = {
+          name: validatedData.emergencyName || currentPatient.emergencyContact?.name || "",
+          relationship: validatedData.emergencyRelationship || currentPatient.emergencyContact?.relationship || "",
+          phone: validatedData.emergencyPhone || currentPatient.emergencyContact?.phone || "",
+        }
+
+        if (currentPatient.emergencyContact) {
+          await tx.emergencyContact.update({
+            where: { id: currentPatient.emergencyContact.id },
+            data: emergencyContactData,
+          })
+        } else {
+          const newEmergencyContact = await tx.emergencyContact.create({
+            data: emergencyContactData,
+          })
+          await tx.patient.update({
+            where: { id: patientId },
+            data: { emergencyContactId: newEmergencyContact.id },
+          })
+        }
+      }
     })
 
-    revalidatePath("/admin")
-    return { success: true, message: "Appointment updated successfully" }
+    revalidatePath("/administrator")
+    return { success: true, message: "Patient account updated successfully" }
   } catch (error) {
-    console.error("Error updating appointment:", error)
-    return { success: false, message: "Failed to update appointment" }
+    console.error("Error updating patient account:", error)
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        message: "Validation error",
+        errors: error.errors.map((e) => `${e.path.join(".")}: ${e.message}`),
+      }
+    }
+    return { success: false, message: "Failed to update patient account" }
   }
 }
 
-export async function cancelAppointment(appointmentId: number, reason?: string) {
+export async function deletePatientAccount(patientId: number) {
   try {
-    const doctor = await requireAuth()
-
-    // Verify the appointment belongs to this doctor
-    const appointment = await prisma.appointment.findFirst({
-      where: {
-        id: appointmentId,
-        doctorId: doctor.id,
-      },
+    // Check if patient has appointments
+    const appointmentCount = await prisma.appointment.count({
+      where: { patientId },
     })
 
-    if (!appointment) {
-      return { success: false, message: "Appointment not found or access denied" }
+    if (appointmentCount > 0) {
+      return {
+        success: false,
+        message: "Cannot delete patient with existing appointments. Please cancel all appointments first.",
+      }
     }
 
-    await prisma.appointment.update({
-      where: { id: appointmentId },
-      data: {
-        status: "Cancelled",
-        notes: reason ? `Cancelled: ${reason}` : "Cancelled by doctor",
+    // Get patient with related data
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+      include: {
+        address: true,
+        emergencyContact: true,
+        medicalInfo: true,
+        preferences: true,
+        stats: true,
       },
     })
 
-    revalidatePath("/admin")
-    return { success: true, message: "Appointment cancelled successfully" }
+    if (!patient) {
+      return { success: false, message: "Patient not found" }
+    }
+
+    // Delete patient and related data in transaction
+    await prisma.$transaction(async (tx) => {
+      // Delete related records first
+      if (patient.address) {
+        await tx.address.delete({ where: { id: patient.address.id } })
+      }
+      if (patient.emergencyContact) {
+        await tx.emergencyContact.delete({ where: { id: patient.emergencyContact.id } })
+      }
+      if (patient.medicalInfo) {
+        await tx.medicalInfo.delete({ where: { id: patient.medicalInfo.id } })
+      }
+      if (patient.preferences) {
+        await tx.preferences.delete({ where: { id: patient.preferences.id } })
+      }
+      if (patient.stats) {
+        await tx.stats.delete({ where: { id: patient.stats.id } })
+      }
+
+      // Finally delete the patient
+      await tx.patient.delete({ where: { id: patientId } })
+    })
+
+    revalidatePath("/administrator")
+    return { success: true, message: "Patient account deleted successfully" }
   } catch (error) {
-    console.error("Error cancelling appointment:", error)
-    return { success: false, message: "Failed to cancel appointment" }
+    console.error("Error deleting patient account:", error)
+    return { success: false, message: "Failed to delete patient account" }
+  }
+}
+
+export async function deleteDoctorAccount(doctorId: number) {
+  try {
+    // Check if doctor has appointments
+    const appointmentCount = await prisma.appointment.count({
+      where: { doctorId },
+    })
+
+    if (appointmentCount > 0) {
+      return {
+        success: false,
+        message: "Cannot delete doctor with existing appointments. Please reassign or cancel all appointments first.",
+      }
+    }
+
+    // Get doctor with related data
+    const doctor = await prisma.doctor.findUnique({
+      where: { id: doctorId },
+      include: {
+        contactInfo: true,
+        availability: true,
+        preferences: true,
+        stats: true,
+      },
+    })
+
+    if (!doctor) {
+      return { success: false, message: "Doctor not found" }
+    }
+
+    // Delete doctor and related data in transaction
+    await prisma.$transaction(async (tx) => {
+      // Delete related records first
+      if (doctor.contactInfo) {
+        await tx.doctorContactInfo.delete({ where: { id: doctor.contactInfo.id } })
+      }
+      if (doctor.availability) {
+        await tx.doctorAvailability.delete({ where: { id: doctor.availability.id } })
+      }
+      if (doctor.preferences) {
+        await tx.doctorPreferences.delete({ where: { id: doctor.preferences.id } })
+      }
+      if (doctor.stats) {
+        await tx.doctorStats.delete({ where: { id: doctor.stats.id } })
+      }
+
+      // Finally delete the doctor
+      await tx.doctor.delete({ where: { id: doctorId } })
+    })
+
+    revalidatePath("/administrator")
+    return { success: true, message: "Doctor account deleted successfully" }
+  } catch (error) {
+    console.error("Error deleting doctor account:", error)
+    return { success: false, message: "Failed to delete doctor account" }
   }
 }
