@@ -307,57 +307,6 @@ export default function ProfilePage() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8 animate-in slide-in-from-top-4 fade-in-0 duration-700">
-        <div>
-          <h1 className="text-3xl font-bold">Profile</h1>
-          <p className="text-muted-foreground mt-2">Manage your account information and preferences</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {isCurrentlyEditing ? (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  if (activeTab === "personal") handleCancelPersonal()
-                  else if (activeTab === "medical") handleCancelMedical()
-                  else if (activeTab === "preferences") handleCancelPreferences()
-                }}
-                disabled={isPersonalPending || isMedicalPending || isPreferencesPending}
-              >
-                <X className="h-4 w-4 mr-2" />
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                form={`${activeTab}-form`}
-                disabled={isPersonalPending || isMedicalPending || isPreferencesPending}
-                className="flex items-center gap-2"
-              >
-                {isPersonalPending || isMedicalPending || isPreferencesPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4" />
-                )}
-                {isPersonalPending || isMedicalPending || isPreferencesPending ? "Saving..." : "Save Changes"}
-              </Button>
-            </>
-          ) : (
-            <Button
-              onClick={() => {
-                if (activeTab === "personal") setIsEditingPersonal(true)
-                else if (activeTab === "medical") setIsEditingMedical(true)
-                else if (activeTab === "preferences") setIsEditingPreferences(true)
-              }}
-              className="flex items-center gap-2"
-              disabled={activeTab === "security"}
-            >
-              <Edit className="h-4 w-4" />
-              Edit {activeTab === "personal" ? "Personal" : activeTab === "medical" ? "Medical" : "Preferences"}
-            </Button>
-          )}
-        </div>
-      </div>
 
       {/* Success Message */}
       {successMessage && (

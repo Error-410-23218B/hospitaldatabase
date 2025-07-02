@@ -1,18 +1,26 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Stethoscope, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
 
 export default function DoctorLoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
+  const { user, loading } = useAuth()
   const [loginState, setLoginState] = useState({ success: false, message: "" })
   const [isPending, setIsPending] = useState(false)
+
+  useEffect(() => {
+    if (!loading && user?.userType === "doctor") {
+      router.replace("/doctor/appointments")
+    }
+  }, [user, loading, router])
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -38,7 +46,7 @@ export default function DoctorLoginPage() {
         setLoginState({ success: true, message: "Login successful" })
         // Use setTimeout to ensure state updates before redirect
         setTimeout(() => {
-          router.push("/admin")
+          router.push("/doctor/appointments")
         }, 0)
       } else {
         setLoginState({ success: false, message: result.error || "Login failed" })

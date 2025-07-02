@@ -41,21 +41,20 @@ export default function Header() {
     { href: "/", label: "Home", icon: Home },
     { href: "/about", label: "About", icon: Info },
     { href: "/contact", label: "Contact", icon: Mail },
-    { href: "/appointments", label: "Appointments", icon: Clock },
   ]
+
+const appointmentsHref = user?.specialization ? "/doctor/appointments" : "/appointments"
+  navigationLinks.push({ href: appointmentsHref, label: "Appointments", icon: Clock })
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between px-4">
-        {/* Logo */}
         <Link href="/" className="flex items-center space-x-2">
           <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
             <span className="text-primary-foreground font-bold text-sm">L</span>
           </div>
           <span className="font-bold text-xl">Logo</span>
         </Link>
-
-        {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center space-x-6">
           {navigationLinks.map((link) => (
             <Link
@@ -67,8 +66,6 @@ export default function Header() {
             </Link>
           ))}
         </nav>
-
-        {/* User Section */}
         <div className="flex items-center space-x-4">
           {loading ? (
             <span>Loading user...</span>
@@ -93,7 +90,10 @@ export default function Header() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link href={user && user.specialization ? "/doctor/profile" : "/profile"} className="flex items-center">
+                  <Link
+                    href={user && user.specialization ? "/doctor/profile" : "/profile"}
+                    className="flex items-center"
+                  >
                     <User className="mr-2 h-4 w-4" />
                     <span>Profile</span>
                   </Link>
@@ -116,42 +116,38 @@ export default function Header() {
               Log in
             </Button>
           )}
-
-          {/* Mobile Menu Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            className="md:hidden"
-            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-          >
-            {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
         </div>
-      </div>
-
-      {/* Mobile Navigation */}
-      {isMobileMenuOpen && (
-        <div className="md:hidden border-t bg-background">
-          <nav className="container py-4 px-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="md:hidden"
+          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+        >
+          {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </Button>
+        {isMobileMenuOpen && (
+          <div className="md:hidden border-t bg-background">
             <div className="flex flex-col space-y-3">
-              {navigationLinks.map((link) => {
-                const IconComponent = link.icon
-                return (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="flex items-center space-x-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-2"
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    <IconComponent className="h-4 w-4" />
-                    <span>{link.label}</span>
-                  </Link>
-                )
-              })}
+              <nav className="container py-4 px-4">
+                {navigationLinks.map((link) => {
+                  const IconComponent = link.icon
+                  return (
+                    <Link
+                      key={link.href}
+                      href={link.href}
+                      className="flex items-center space-x-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors py-2"
+                      onClick={() => setIsMobileMenuOpen(false)}
+                    >
+                      <IconComponent className="h-4 w-4" />
+                      <span>{link.label}</span>
+                    </Link>
+                  )
+                })}
+              </nav>
             </div>
-          </nav>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </header>
   )
 }

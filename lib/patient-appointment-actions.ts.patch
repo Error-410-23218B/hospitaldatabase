@@ -1,0 +1,16 @@
+doctorId: number
+  serviceId: number
+  date: string
+  time: string
+}) {
+  try {
+    const patient = await getCurrentPatient()
+=======
+export async function bookAppointment(data: {
+  doctorId: number
+  serviceId: number
+  date: string
+  time: string
+}, request?: NextRequest) {
+  try {
+    const patient = await getCurrentPatient(request)

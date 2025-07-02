@@ -169,6 +169,7 @@ model Service {
   id       Int       @id @default(autoincrement())
   name     String
   description String
+  duration Int?      // Nullable duration field added
   doctors  Doctor[]  @relation("DoctorServices")
   appointments Appointment[]
 }
@@ -178,6 +179,7 @@ model Appointment {
   datetime   DateTime
   status     String    @default("Scheduled")
   notes      String?   // Added notes field, optional
+  priority   Int       @default(0)
   doctor     Doctor    @relation(fields: [doctorId], references: [id])
   doctorId   Int
   patient    Patient   @relation(fields: [patientId], references: [id])

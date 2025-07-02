@@ -1,10 +1,13 @@
-'use client';
+"use client"
 
-import React, { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import type React from "react"
+
+import { useState, useRef, useEffect } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
   DialogContent,
@@ -12,11 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from "@/components/ui/dialog";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Calendar,
   Clock,
@@ -31,415 +35,427 @@ import {
   CalendarDays,
   UserCheck,
   Activity,
-  Edit3,
-} from "lucide-react";
-import { format } from "date-fns";
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+  Check,
+  XCircle,
+} from "lucide-react"
+import { format, addDays } from "date-fns"
+import {
+  getPatientAppointments,
+  bookAppointment,
+  cancelAppointment,
+  getDoctorsWithAvailability,
+  getAvailableTimeSlots,
+  getServicesForDoctor,
+} from "@/lib/patient-appointment-actions"
 
+// Types
 interface Appointment {
-  id: number;
+  id: number
   doctor: {
-    id: number;
-    firstName: string;
-    lastName: string;
-    specialization: string;
-  };
-  service: string;
-  datetime: string;
-  status: string;
-  priority: number;
+    id: number
+    firstName: string
+    lastName: string
+    specialization: string
+  }
+  service: {
+    id: number
+    name: string
+    description: string
+  }
+  datetime: Date
+  status: string
+  priority: number
+  notes?: string
 }
 
-type SortOption = "priority" | "date" | "doctor" | "service";
+interface Doctor {
+  id: number
+  firstName: string
+  lastName: string
+  specialization: string
+  availability?: {
+    mondayStart: string
+    mondayEnd: string
+    tuesdayStart: string
+    tuesdayEnd: string
+    wednesdayStart: string
+    wednesdayEnd: string
+    thursdayStart: string
+    thursdayEnd: string
+    fridayStart: string
+    fridayEnd: string
+    saturdayStart: string
+    saturdayEnd: string
+    sundayStart: string
+    sundayEnd: string
+    consultationDuration: number
+    breakDuration: number
+  }
+}
+
+interface Service {
+  id: number
+  name: string
+  description: string
+}
+
+interface TimeSlot {
+  time: string
+  available: boolean
+  reason?: string
+  isBooked?: boolean
+}
+
+type SortOption = "priority" | "date" | "doctor" | "service"
 
 export default function AppointmentsPage() {
-  const router = useRouter();
-  const [user, setUser] = useState<{ id: number } | null>(null);
-  const [doctors, setDoctors] = useState<{ id: number; firstName: string; lastName: string; specialization: string }[]>([]);
-  const [services, setServices] = useState<{ id: number; name: string }[]>([]);
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [isLoadingAppointments, setIsLoadingAppointments] = useState(true);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedDoctor, setSelectedDoctor] = useState("");
-  const [selectedService, setSelectedService] = useState("");
-  const [selectedDate, setSelectedDate] = useState("");
-  const [selectedTime, setSelectedTime] = useState("");
-  const [draggedItem, setDraggedItem] = useState<number | null>(null);
-  const [dragOverItem, setDragOverItem] = useState<number | null>(null);
-  const [sortBy, setSortBy] = useState<SortOption>("priority");
-  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
-  const dragCounter = useRef(0);
+  const router = useRouter()
+  const { user, loading } = useAuth()
 
-  // New state for edit dialog
-  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [editAppointmentId, setEditAppointmentId] = useState<number | null>(null);
-  const [editSelectedDoctor, setEditSelectedDoctor] = useState("");
-  const [editSelectedService, setEditSelectedService] = useState("");
-  const [editSelectedDate, setEditSelectedDate] = useState("");
-  const [editSelectedTime, setEditSelectedTime] = useState("");
-  const [editSelectedStatus, setEditSelectedStatus] = useState("");
-
-  // Function to open edit dialog and prefill data
-  const openEditDialog = (appointment: Appointment) => {
-    setEditAppointmentId(appointment.id);
-    // Find doctor id by id
-    const doctor = doctors.find(d => d.id === appointment.doctor.id);
-    setEditSelectedDoctor(doctor ? doctor.id.toString() : "");
-    // Find service id by id
-    const service = services.find(s => s.id.toString() === appointment.service);
-    setEditSelectedService(service ? service.id.toString() : "");
-    // Set date and time from datetime string
-    const dt = new Date(appointment.datetime);
-    setEditSelectedDate(dt.toISOString().split("T")[0]);
-    setEditSelectedTime(dt.toTimeString().slice(0, 5));
-    setEditSelectedStatus(appointment.status);
-    setIsEditDialogOpen(true);
-  };
+  const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [doctors, setDoctors] = useState<Doctor[]>([])
+  const [services, setServices] = useState<Service[]>([])
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<TimeSlot[]>([])
+  const [isDialogOpen, setIsDialogOpen] = useState(false)
+  const [selectedDoctor, setSelectedDoctor] = useState("")
+  const [selectedService, setSelectedService] = useState("")
+  const [selectedDate, setSelectedDate] = useState("")
+  const [selectedTime, setSelectedTime] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [isBooking, setIsBooking] = useState(false)
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false)
+  const [bookingError, setBookingError] = useState("")
+  const [bookingSuccess, setBookingSuccess] = useState("")
+  const [draggedItem, setDraggedItem] = useState<number | null>(null)
+  const [dragOverItem, setDragOverItem] = useState<number | null>(null)
+  const [sortBy, setSortBy] = useState<SortOption>("priority")
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc")
+  const dragCounter = useRef(0)
 
   useEffect(() => {
-    async function checkUser() {
-      try {
-        const meRes = await fetch('/api/me', { cache: 'no-store', credentials: 'include' });
-        if (!meRes.ok) throw new Error('Not logged in');
-        const meData = await meRes.json();
-        if (!meData.user?.id) throw new Error('Not logged in');
-        setUser({ id: meData.user.id });
-      } catch (error) {
-        router.push('/login');
-      }
+    if (!loading && !user) {
+      router.push("/login")
     }
-    checkUser();
-  }, [router]);
+  }, [loading, user, router])
 
   useEffect(() => {
-    async function fetchDoctorsAndServices() {
-      try {
-        const doctorsRes = await fetch('/api/doctors', { cache: 'no-store' });
-        if (!doctorsRes.ok) throw new Error('Failed to fetch doctors');
-        const doctorsData = await doctorsRes.json();
-        setDoctors(doctorsData);
+    loadInitialData()
+  }, [])
 
-        const servicesRes = await fetch('/api/services', { cache: 'no-store' });
-        if (!servicesRes.ok) throw new Error('Failed to fetch services');
-        const servicesData = await servicesRes.json();
-        setServices(servicesData);
-      } catch (error) {
-        console.error('Error fetching doctors or services:', error);
-      }
-    }
-    fetchDoctorsAndServices();
-  }, []);
-
-  // Fetch appointments from backend API
   useEffect(() => {
-    async function fetchAppointments() {
-      if (!user) return;
-      setIsLoadingAppointments(true);
-      try {
-        const res = await fetch(`/api/appointments?patientId=${user.id}`, { cache: 'no-store', credentials: 'include' });
-        if (!res.ok) throw new Error('Failed to fetch appointments');
-        const data = await res.json();
-
-        // Map backend appointments to local state format
-        const mappedAppointments = data.appointments.map((apt: any, index: number) => ({
-          id: apt.id,
-          doctor: {
-            id: apt.doctor.id,
-            firstName: apt.doctor.firstName,
-            lastName: apt.doctor.lastName,
-            specialization: apt.doctor.specialization,
-          },
-          service: apt.service.name,
-          datetime: apt.datetime,
-          status: apt.status.toLowerCase(),
-          priority: index + 1,
-        }));
-
-        setAppointments(mappedAppointments);
-      } catch (error) {
-        console.error('Error loading appointments:', error);
-      } finally {
-        setIsLoadingAppointments(false);
-      }
+    if (selectedDoctor && selectedDate) {
+      loadAvailableTimeSlots()
+    } else {
+      setAvailableTimeSlots([])
+      setSelectedTime("")
     }
-    fetchAppointments();
-  }, [user]);
+  }, [selectedDoctor, selectedDate, selectedService])
+
+  const loadInitialData = async () => {
+    try {
+      setIsLoading(true)
+      const [doctorsData, appointmentsResponse] = await Promise.all([
+        getDoctorsWithAvailability(),
+        fetch('/api/appointments').then(res => res.json()),
+      ])
+      if (appointmentsResponse.error) {
+        console.error("Error fetching appointments:", appointmentsResponse.error)
+        setAppointments([])
+      } else {
+        // Map notes null to undefined to satisfy type
+        const mappedAppointments = appointmentsResponse.appointments.map((apt: any) => ({
+          ...apt,
+          notes: apt.notes === null ? undefined : apt.notes,
+          datetime: new Date(apt.datetime),
+        }))
+        setAppointments(mappedAppointments)
+      }
+      // Map doctors to ensure availability is undefined instead of null
+      const mappedDoctors = doctorsData.map((doctor: any) => ({
+        ...doctor,
+        availability: doctor.availability === null ? undefined : doctor.availability,
+      }))
+      setDoctors(mappedDoctors)
+    } catch (error) {
+      console.error("Error loading initial data:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const loadServicesForDoctor = async (doctorId: string) => {
+    try {
+      const servicesData = await getServicesForDoctor(Number.parseInt(doctorId))
+      setServices(servicesData)
+    } catch (error) {
+      console.error("Error loading services:", error)
+      setServices([])
+    }
+  }
+
+  const loadAvailableTimeSlots = async () => {
+    if (!selectedDoctor || !selectedDate) return
+
+    try {
+      setIsLoadingSlots(true)
+      const slots = await getAvailableTimeSlots(Number.parseInt(selectedDoctor), selectedDate)
+      setAvailableTimeSlots(slots)
+    } catch (error) {
+      console.error("Error loading time slots:", error)
+      setAvailableTimeSlots([])
+    } finally {
+      setIsLoadingSlots(false)
+    }
+  }
+
+  const handleDoctorChange = (doctorId: string) => {
+    setSelectedDoctor(doctorId)
+    setSelectedService("")
+    setSelectedTime("")
+    setServices([])
+    if (doctorId) {
+      loadServicesForDoctor(doctorId)
+    }
+  }
 
   const handleBookAppointment = async () => {
     if (!selectedDoctor || !selectedService || !selectedDate || !selectedTime) {
-      alert("Please fill in all fields");
-      return;
+      setBookingError("Please fill in all fields")
+      return
     }
 
     try {
-      if (!user) throw new Error('User not logged in');
+      setIsBooking(true)
+      setBookingError("")
+      setBookingSuccess("")
 
-      const datetime = new Date(`${selectedDate}T${selectedTime}`);
-
-      const res = await fetch('/api/appointments', {
+      const response = await fetch('/api/book-appointment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({
-          patientId: user.id,
-          doctorId: Number(selectedDoctor),
-          serviceId: Number(selectedService),
-          datetime,
+          doctorId: Number.parseInt(selectedDoctor),
+          serviceId: Number.parseInt(selectedService),
+          date: selectedDate,
+          time: selectedTime,
         }),
-      });
+      })
+      const result = await response.json()
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        alert(errorData.error || 'Failed to book appointment');
-        console.log(errorData.error);
-        return;
+      if (result.message) {
+        setBookingSuccess("Appointment booked successfully!")
+        // Reset form
+        setSelectedDoctor("")
+        setSelectedService("")
+        setSelectedDate("")
+        setSelectedTime("")
+        setServices([])
+        setAvailableTimeSlots([])
+        // Reload appointments
+        const updatedAppointmentsResponse = await fetch('/api/appointments')
+        const updatedAppointmentsData = await updatedAppointmentsResponse.json()
+        if (updatedAppointmentsData.error) {
+          console.error("Error fetching appointments:", updatedAppointmentsData.error)
+          setAppointments([])
+        } else {
+          const mappedAppointments = updatedAppointmentsData.appointments.map((apt: any) => ({
+            ...apt,
+            notes: apt.notes === null ? undefined : apt.notes,
+            datetime: new Date(apt.datetime),
+          }))
+          setAppointments(mappedAppointments)
+        }
+        // Close dialog after a short delay
+        setTimeout(() => {
+          setIsDialogOpen(false)
+          setBookingSuccess("")
+        }, 2000)
+      } else {
+        setBookingError(result.error || "Failed to book appointment")
       }
-
-      // Refresh appointments list
-      setIsDialogOpen(false);
-      setSelectedDoctor("");
-      setSelectedService("");
-      setSelectedDate("");
-      setSelectedTime("");
-      // Refetch appointments
-      const updatedRes = await fetch(`/api/appointments?patientId=${user.id}`, { cache: 'no-store', credentials: 'include' });
-      const updatedData = await updatedRes.json();
-      const mappedAppointments = updatedData.appointments.map((apt: any, index: number) => ({
-        id: apt.id,
-        doctor: {
-          id: apt.doctor.id,
-          firstName: apt.doctor.firstName,
-          lastName: apt.doctor.lastName,
-          specialization: apt.doctor.specialization,
-        },
-        service: apt.service.name,
-        datetime: apt.datetime,
-        status: apt.status.toLowerCase(),
-        priority: index + 1,
-      }));
-      setAppointments(mappedAppointments);
     } catch (error) {
-      console.error('Error booking appointment:', error);
-      alert('Failed to book appointment');
+      console.error("Error booking appointment:", error)
+      setBookingError("An unexpected error occurred")
+    } finally {
+      setIsBooking(false)
     }
-  };
+  }
 
-  const handleUpdateAppointment = async () => {
-    if (!editAppointmentId || !editSelectedDoctor || !editSelectedService || !editSelectedDate || !editSelectedTime || !editSelectedStatus) {
-      alert("Please fill in all fields");
-      return;
-    }
+  const handleCancelAppointment = async (id: number) => {
+    if (!confirm("Are you sure you want to cancel this appointment?")) return
 
     try {
-      const datetime = new Date(`${editSelectedDate}T${editSelectedTime}`);
-
-      const res = await fetch('/api/appointments', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          appointmentId: editAppointmentId,
-          doctorId: Number(editSelectedDoctor),
-          serviceId: Number(editSelectedService),
-          datetime,
-          status: editSelectedStatus,
-        }),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json();
-        alert(errorData.error || 'Failed to update appointment');
-        console.log(errorData.error);
-        return;
+      const result = await cancelAppointment(id)
+      if (result.success) {
+        const updatedAppointments = await getPatientAppointments()
+        setAppointments(updatedAppointments)
+      } else {
+        alert(result.message || "Failed to cancel appointment")
       }
-
-      // Refresh appointments list
-      if (!user) throw new Error('User not logged in');
-      const updatedRes = await fetch(`/api/appointments?patientId=${user.id}`, { cache: 'no-store', credentials: 'include' });
-      const updatedData = await updatedRes.json();
-      const mappedAppointments = updatedData.appointments.map((apt: any, index: number) => ({
-        id: apt.id,
-        doctor: apt.doctor.name,
-        service: apt.service.name,
-        datetime: apt.datetime,
-        status: apt.status.toLowerCase(),
-        specialty: apt.doctor.specialization,
-        priority: index + 1,
-      }));
-      setAppointments(mappedAppointments);
-
-      setIsEditDialogOpen(false);
-      setEditAppointmentId(null);
-      setEditSelectedDoctor("");
-      setEditSelectedService("");
-      setEditSelectedDate("");
-      setEditSelectedTime("");
-      setEditSelectedStatus("");
     } catch (error) {
-      console.error('Error updating appointment:', error);
-      alert('Failed to update appointment');
+      console.error("Error cancelling appointment:", error)
+      alert("An unexpected error occurred")
     }
-  };
-
-  const handleCancelAppointment = (id: number) => {
-    // TODO: Implement cancel appointment API call
-    alert('Cancel appointment functionality not implemented yet.');
-  };
+  }
 
   const handleDragStart = (e: React.DragEvent, id: number) => {
-    if (sortBy !== "priority") return; // Only allow drag when sorted by priority
-    setDraggedItem(id);
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/html", "");
-    dragCounter.current = 0;
-  };
+    if (sortBy !== "priority") return
+    setDraggedItem(id)
+    e.dataTransfer.effectAllowed = "move"
+    e.dataTransfer.setData("text/html", "")
+    dragCounter.current = 0
+  }
 
   const handleDragEnd = () => {
-    setDraggedItem(null);
-    setDragOverItem(null);
-    dragCounter.current = 0;
-  };
+    setDraggedItem(null)
+    setDragOverItem(null)
+    dragCounter.current = 0
+  }
 
   const handleDragOver = (e: React.DragEvent) => {
-    if (sortBy !== "priority") return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-  };
+    if (sortBy !== "priority") return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+  }
 
   const handleDragEnter = (e: React.DragEvent, id: number) => {
-    if (sortBy !== "priority") return;
-    e.preventDefault();
-    dragCounter.current++;
-    setDragOverItem(id);
-  };
+    if (sortBy !== "priority") return
+    e.preventDefault()
+    dragCounter.current++
+    setDragOverItem(id)
+  }
 
   const handleDragLeave = (e: React.DragEvent) => {
-    if (sortBy !== "priority") return;
-    e.preventDefault();
-    dragCounter.current--;
+    if (sortBy !== "priority") return
+    e.preventDefault()
+    dragCounter.current--
     if (dragCounter.current === 0) {
-      setDragOverItem(null);
+      setDragOverItem(null)
     }
-  };
+  }
 
   const handleDrop = (e: React.DragEvent, targetId: number) => {
-    if (sortBy !== "priority") return;
-    e.preventDefault();
+    if (sortBy !== "priority") return
+    e.preventDefault()
 
     if (draggedItem === null || draggedItem === targetId) {
-      setDraggedItem(null);
-      setDragOverItem(null);
-      return;
+      setDraggedItem(null)
+      setDragOverItem(null)
+      return
     }
 
-    const draggedIndex = appointments.findIndex((apt) => apt.id === draggedItem);
-    const targetIndex = appointments.findIndex((apt) => apt.id === targetId);
+    const draggedIndex = appointments.findIndex((apt) => apt.id === draggedItem)
+    const targetIndex = appointments.findIndex((apt) => apt.id === targetId)
 
-    if (draggedIndex === -1 || targetIndex === -1) return;
+    if (draggedIndex === -1 || targetIndex === -1) return
 
-    const newAppointments = [...appointments];
-    const draggedAppointment = newAppointments[draggedIndex];
+    const newAppointments = [...appointments]
+    const draggedAppointment = newAppointments[draggedIndex]
 
-    // Remove dragged item
-    newAppointments.splice(draggedIndex, 1);
+    newAppointments.splice(draggedIndex, 1)
+    newAppointments.splice(targetIndex, 0, draggedAppointment)
 
-    // Insert at new position
-    newAppointments.splice(targetIndex, 0, draggedAppointment);
-
-    // Update priorities
     const updatedAppointments = newAppointments.map((apt, index) => ({
       ...apt,
       priority: index + 1,
-    }));
+    }))
 
-    setAppointments(updatedAppointments);
-    setDraggedItem(null);
-    setDragOverItem(null);
-    dragCounter.current = 0;
-  };
+    setAppointments(updatedAppointments)
+    setDraggedItem(null)
+    setDragOverItem(null)
+    dragCounter.current = 0
+  }
 
   const movePriority = (id: number, direction: "up" | "down") => {
-    if (sortBy !== "priority") return;
+    if (sortBy !== "priority") return
 
-    const currentIndex = appointments.findIndex((apt) => apt.id === id);
-    if (currentIndex === -1) return;
+    const currentIndex = appointments.findIndex((apt) => apt.id === id)
+    if (currentIndex === -1) return
 
-    const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1;
-    if (newIndex < 0 || newIndex >= appointments.length) return;
+    const newIndex = direction === "up" ? currentIndex - 1 : currentIndex + 1
+    if (newIndex < 0 || newIndex >= appointments.length) return
 
-    const newAppointments = [...appointments];
-    const [movedItem] = newAppointments.splice(currentIndex, 1);
-    newAppointments.splice(newIndex, 0, movedItem);
+    const newAppointments = [...appointments]
+    const [movedItem] = newAppointments.splice(currentIndex, 1)
+    newAppointments.splice(newIndex, 0, movedItem)
 
-    // Update priorities
     const updatedAppointments = newAppointments.map((apt, index) => ({
       ...apt,
       priority: index + 1,
-    }));
+    }))
 
-    setAppointments(updatedAppointments);
-  };
+    setAppointments(updatedAppointments)
+  }
 
   const handleSort = (option: SortOption) => {
     if (sortBy === option) {
-      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc")
     } else {
-      setSortBy(option);
-      setSortDirection("asc");
+      setSortBy(option)
+      setSortDirection("asc")
     }
-  };
+  }
 
   const getSortedAppointments = () => {
     const sorted = [...appointments].sort((a, b) => {
-      let comparison = 0;
+      let comparison = 0
 
       switch (sortBy) {
         case "priority":
-          comparison = a.priority - b.priority;
-          break;
+          comparison = a.priority - b.priority
+          break
         case "date":
-          comparison = new Date(a.datetime).getTime() - new Date(b.datetime).getTime();
-          break;
+          comparison = a.datetime.getTime() - b.datetime.getTime()
+          break
         case "doctor":
-          // Compare by doctor's full name
-          const nameA = `${a.doctor.firstName} ${a.doctor.lastName}`;
-          const nameB = `${b.doctor.firstName} ${b.doctor.lastName}`;
-          comparison = nameA.localeCompare(nameB);
-          break;
+          comparison = `${a.doctor.firstName} ${a.doctor.lastName}`.localeCompare(
+            `${b.doctor.firstName} ${b.doctor.lastName}`,
+          )
+          break
         case "service":
-          comparison = a.service.localeCompare(b.service);
-          break;
+          comparison = a.service.name.localeCompare(b.service.name)
+          break
         default:
-          comparison = a.priority - b.priority;
+          comparison = a.priority - b.priority
       }
 
-      return sortDirection === "desc" ? -comparison : comparison;
-    });
+      return sortDirection === "desc" ? -comparison : comparison
+    })
 
-    return sorted;
-  };
+    return sorted
+  }
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "scheduled":
-        return "bg-green-100 text-green-800";
+    switch (status.toLowerCase()) {
+      case "confirmed":
+        return "bg-green-100 text-green-800"
       case "pending":
-        return "bg-yellow-100 text-yellow-800";
+        return "bg-yellow-100 text-yellow-800"
       case "cancelled":
-        return "bg-red-100 text-red-800";
+        return "bg-red-100 text-red-800"
+      case "completed":
+        return "bg-blue-100 text-blue-800"
+      case "scheduled":
+        return "bg-purple-100 text-purple-800"
       default:
-        return "bg-gray-100 text-gray-800";
+        return "bg-gray-100 text-gray-800"
     }
-  };
+  }
 
   const getPriorityColor = (priority: number) => {
-    if (priority === 1) return "bg-red-100 text-red-800 border-red-200";
-    if (priority === 2) return "bg-orange-100 text-orange-800 border-orange-200";
-    if (priority === 3) return "bg-yellow-100 text-yellow-800 border-yellow-200";
-    return "bg-blue-100 text-blue-800 border-blue-200";
-  };
+    if (priority === 1) return "bg-red-100 text-red-800 border-red-200"
+    if (priority === 2) return "bg-orange-100 text-orange-800 border-orange-200"
+    if (priority === 3) return "bg-yellow-100 text-yellow-800 border-yellow-200"
+    return "bg-blue-100 text-blue-800 border-blue-200"
+  }
 
   const getSortIcon = (option: SortOption) => {
-    if (sortBy !== option) return <ArrowUpDown className="h-4 w-4" />;
-    return sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />;
-  };
+    if (sortBy !== option) return <ArrowUpDown className="h-4 w-4" />
+    return sortDirection === "asc" ? <ArrowUp className="h-4 w-4" /> : <ArrowDown className="h-4 w-4" />
+  }
 
   const getSortLabel = () => {
     const labels = {
@@ -447,19 +463,62 @@ export default function AppointmentsPage() {
       date: "Date",
       doctor: "Doctor",
       service: "Service",
-    };
-    return labels[sortBy];
-  };
+    }
+    return labels[sortBy]
+  }
 
-  const sortedAppointments = getSortedAppointments();
-  const isDragEnabled = sortBy === "priority";
+  const isDoctorAvailableOnDate = (doctor: Doctor, date: string) => {
+    if (!doctor.availability) return false
 
-  if (isLoadingAppointments) {
+    const selectedDate = new Date(date)
+    const dayOfWeek = selectedDate.getDay() // 0 = Sunday, 1 = Monday, etc.
+
+    const dayNames = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+    const dayName = dayNames[dayOfWeek]
+
+    const startKey = `${dayName}Start` as keyof typeof doctor.availability
+    const endKey = `${dayName}End` as keyof typeof doctor.availability
+
+    const startTime = doctor.availability[startKey] as string
+    const endTime = doctor.availability[endKey] as string
+
+    return startTime !== "00:00" || endTime !== "00:00"
+  }
+
+  const getMinDate = () => {
+    const tomorrow = addDays(new Date(), 1)
+    return format(tomorrow, "yyyy-MM-dd")
+  }
+
+  const getTimeSlotIcon = (slot: TimeSlot) => {
+    if (slot.available) {
+      return <Check className="h-4 w-4 text-green-600" />
+    } else if (slot.isBooked) {
+      return <XCircle className="h-4 w-4 text-red-600" />
+    } else {
+      return <X className="h-4 w-4 text-gray-400" />
+    }
+  }
+
+  const getTimeSlotColor = (slot: TimeSlot) => {
+    if (slot.available) {
+      return "text-green-700 bg-green-50 border-green-200 hover:bg-green-100"
+    } else if (slot.isBooked) {
+      return "text-red-700 bg-red-50 border-red-200"
+    } else {
+      return "text-gray-500 bg-gray-50 border-gray-200"
+    }
+  }
+
+  const sortedAppointments = getSortedAppointments()
+  const isDragEnabled = sortBy === "priority"
+
+  if (isLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
         <div className="flex items-center justify-center min-h-[400px]">
           <div className="flex items-center gap-2">
-            <Clock className="h-6 w-6 animate-spin" />
+            <Loader2 className="h-6 w-6 animate-spin" />
             <span>Loading appointments...</span>
           </div>
         </div>
@@ -478,58 +537,76 @@ export default function AppointmentsPage() {
           </p>
         </div>
 
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogTrigger asChild>
-          <Button className="flex items-center gap-2 animate-in slide-in-from-right-4 fade-in-0 duration-700 delay-300 hover:scale-105 transition-transform">
-            <Plus className="h-4 w-4" />
-            Book New Appointment
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-md animate-in zoom-in-95 fade-in-0 duration-300">
-          <DialogHeader>
-            <DialogTitle>Book New Appointment</DialogTitle>
-            <DialogDescription>Select your preferred doctor, service, and time slot.</DialogDescription>
-          </DialogHeader>
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="flex items-center gap-2 animate-in slide-in-from-right-4 fade-in-0 duration-700 delay-300 hover:scale-105 transition-transform">
+              <Plus className="h-4 w-4" />
+              Book New Appointment
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="sm:max-w-2xl animate-in zoom-in-95 fade-in-0 duration-300">
+            <DialogHeader>
+              <DialogTitle>Book New Appointment</DialogTitle>
+              <DialogDescription>Select your preferred doctor, service, and available time slot.</DialogDescription>
+            </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="doctor">Doctor</Label>
-              <Select value={selectedDoctor} onValueChange={setSelectedDoctor}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a doctor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {doctors.map((doctor) => (
-                    <SelectItem key={doctor.id} value={doctor.id.toString()}>
-                      <div className="flex flex-col">
-                        <span>{doctor.firstName} {doctor.lastName}</span>
-                        <span className="text-sm text-muted-foreground">{doctor.specialization}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <div className="space-y-4 py-4">
+              {bookingError && (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{bookingError}</AlertDescription>
+                </Alert>
+              )}
 
-            <div className="space-y-2">
-              <Label htmlFor="service">Service</Label>
-              <Select value={selectedService} onValueChange={setSelectedService}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a service" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={service.id.toString()}>
-                      <div className="flex justify-between w-full">
-                        <span>{service.name}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+              {bookingSuccess && (
+                <Alert className="border-green-200 bg-green-50">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <AlertDescription className="text-green-600">{bookingSuccess}</AlertDescription>
+                </Alert>
+              )}
 
-            <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="doctor">Doctor</Label>
+                  <Select value={selectedDoctor} onValueChange={handleDoctorChange}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a doctor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {doctors.map((doctor) => (
+                        <SelectItem key={doctor.id} value={doctor.id.toString()}>
+                          <div className="flex flex-col">
+                            <span>
+                              {doctor.firstName} {doctor.lastName}
+                            </span>
+                            <span className="text-sm text-muted-foreground">{doctor.specialization}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="service">Service</Label>
+                  <Select value={selectedService} onValueChange={setSelectedService} disabled={!selectedDoctor}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={selectedDoctor ? "Select a service" : "Select a doctor first"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {services.map((service) => (
+                        <SelectItem key={service.id} value={service.id.toString()}>
+                          <div className="flex flex-col">
+                            <span>{service.name}</span>
+                            <span className="text-sm text-muted-foreground">{service.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="date">Date</Label>
                 <Input
@@ -537,164 +614,130 @@ export default function AppointmentsPage() {
                   type="date"
                   value={selectedDate}
                   onChange={(e) => setSelectedDate(e.target.value)}
-                  min={new Date().toISOString().split("T")[0]}
+                  min={getMinDate()}
+                  disabled={!selectedDoctor}
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="time">Time</Label>
-                <Select value={selectedTime} onValueChange={setSelectedTime}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 18 }, (_, i) => {
-                      const hour = Math.floor(i / 2) + 9;
-                      const minute = i % 2 === 0 ? "00" : "30";
-                      const time = `${hour.toString().padStart(2, "0")}:${minute}`;
-                      return (
-                        <SelectItem key={time} value={time}>
-                          {time}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleBookAppointment} className="hover:scale-105 transition-transform duration-200">
-              Book Appointment
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Appointment Dialog */}
-      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-md animate-in zoom-in-95 fade-in-0 duration-300">
-          <DialogHeader>
-            <DialogTitle>Edit Appointment</DialogTitle>
-            <DialogDescription>Update your appointment details below.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="edit-doctor">Doctor</Label>
-              <Select value={editSelectedDoctor} onValueChange={setEditSelectedDoctor}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select a doctor" />
-            </SelectTrigger>
-            <SelectContent>
-              {doctors.map((doctor) => (
-                <SelectItem key={doctor.id} value={doctor.id.toString()}>
-                  <div className="flex flex-col">
-                    <span>{doctor.firstName} {doctor.lastName}</span>
-                    <span className="text-sm text-muted-foreground">{doctor.specialization}</span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-service">Service</Label>
-              <Select value={editSelectedService} onValueChange={setEditSelectedService}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a service" />
-                </SelectTrigger>
-                <SelectContent>
-                  {services.map((service) => (
-                    <SelectItem key={service.id} value={service.id.toString()}>
-                      <div className="flex justify-between w-full">
-                        <span>{service.name}</span>
+                {selectedDoctor && selectedDate && (
+                  <div className="text-sm">
+                    {isDoctorAvailableOnDate(doctors.find((d) => d.id.toString() === selectedDoctor)!, selectedDate) ? (
+                      <div className="flex items-center gap-1 text-green-600">
+                        <Check className="h-4 w-4" />
+                        Doctor is available on this date
                       </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="edit-date">Date</Label>
-                <Input
-                  id="edit-date"
-                  type="date"
-                  value={editSelectedDate}
-                  onChange={(e) => setEditSelectedDate(e.target.value)}
-                  min={new Date().toISOString().split("T")[0]}
-                />
+                    ) : (
+                      <div className="flex items-center gap-1 text-red-600">
+                        <XCircle className="h-4 w-4" />
+                        Doctor is not available on this date
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="edit-time">Time</Label>
-                <Select value={editSelectedTime} onValueChange={setEditSelectedTime}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select time" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Array.from({ length: 18 }, (_, i) => {
-                      const hour = Math.floor(i / 2) + 9;
-                      const minute = i % 2 === 0 ? "00" : "30";
-                      const time = `${hour.toString().padStart(2, "0")}:${minute}`;
-                      return (
-                        <SelectItem key={time} value={time}>
-                          {time}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="time">Available Time Slots</Label>
+                {isLoadingSlots ? (
+                  <div className="flex items-center gap-2 p-3 border rounded-md">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span className="text-sm">Loading available times...</span>
+                  </div>
+                ) : availableTimeSlots.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-60 overflow-y-auto p-2 border rounded-md bg-gray-50">
+                      {availableTimeSlots.map((slot) => (
+                        <button
+                          key={slot.time}
+                          type="button"
+                          disabled={!slot.available}
+                          onClick={() => setSelectedTime(slot.available ? slot.time : "")}
+                          className={`flex items-center gap-2 p-2 rounded-md border text-sm transition-all duration-200 ${
+                            selectedTime === slot.time
+                              ? "ring-2 ring-blue-500 bg-blue-100 border-blue-300"
+                              : getTimeSlotColor(slot)
+                          } ${
+                            slot.available
+                              ? "cursor-pointer hover:scale-105 active:scale-95"
+                              : "cursor-not-allowed opacity-60"
+                          }`}
+                        >
+                          {getTimeSlotIcon(slot)}
+                          <span className="font-medium">{slot.time}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Legend */}
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Check className="h-3 w-3 text-green-600" />
+                        <span>Available</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <XCircle className="h-3 w-3 text-red-600" />
+                        <span>Booked</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <X className="h-3 w-3 text-gray-400" />
+                        <span>Unavailable</span>
+                      </div>
+                    </div>
+
+                    {selectedTime && (
+                      <div className="p-3 bg-blue-50 border border-blue-200 rounded-md">
+                        <div className="flex items-center gap-2 text-blue-700">
+                          <Clock className="h-4 w-4" />
+                          <span className="font-medium">Selected: {selectedTime}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : selectedDoctor && selectedDate ? (
+                  <div className="p-3 border rounded-md text-sm text-muted-foreground">
+                    {isDoctorAvailableOnDate(doctors.find((d) => d.id.toString() === selectedDoctor)!, selectedDate)
+                      ? "No available time slots for this date"
+                      : "Doctor is not available on this date"}
+                  </div>
+                ) : (
+                  <div className="p-3 border rounded-md text-sm text-muted-foreground">
+                    Select a doctor and date to see available times
+                  </div>
+                )}
               </div>
             </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="edit-status">Status</Label>
-              <Select value={editSelectedStatus} onValueChange={setEditSelectedStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="scheduled">Scheduled</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="cancelled">Cancelled</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
 
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)} disabled={isBooking}>
                 Cancel
               </Button>
               <Button
-                onClick={handleUpdateAppointment}
+                onClick={handleBookAppointment}
                 disabled={
-                  !editSelectedDoctor ||
-                  !editSelectedService ||
-                  !editSelectedDate ||
-                  !editSelectedTime ||
-                  !editSelectedStatus
+                  !selectedDoctor ||
+                  !selectedService ||
+                  !selectedDate ||
+                  !selectedTime ||
+                  isBooking ||
+                  !availableTimeSlots.find((slot) => slot.time === selectedTime)?.available
                 }
-                className="hover:scale-105 transition-transform duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="hover:scale-105 transition-transform duration-200"
               >
-                Save Changes
+                {isBooking ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Booking...
+                  </>
+                ) : (
+                  "Book Appointment"
+                )}
               </Button>
             </div>
-        </DialogContent>
-      </Dialog>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Appointments List */}
       <div className="space-y-4">
-        {!isLoadingAppointments && sortedAppointments.length === 0 ? (
+        {sortedAppointments.length === 0 ? (
           <Card className="animate-in fade-in-50 duration-500">
             <CardContent className="flex flex-col items-center justify-center py-12">
               <Calendar className="h-12 w-12 text-muted-foreground mb-4 animate-pulse" />
@@ -722,10 +765,9 @@ export default function AppointmentsPage() {
                   {sortedAppointments.length} appointment{sortedAppointments.length !== 1 ? "s" : ""}
                 </Badge>
 
-                {/* Sort Options */}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" className="flex items-center gap-2 bg-transparent">
                       {getSortIcon(sortBy)}
                       Sort by {getSortLabel()}
                     </Button>
@@ -763,7 +805,6 @@ export default function AppointmentsPage() {
               </div>
             </div>
 
-            {/* Scrollable appointments container */}
             <div className="max-h-[600px] overflow-y-auto pr-2 space-y-4 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400">
               {sortedAppointments.map((appointment, index) => (
                 <Card
@@ -801,19 +842,18 @@ export default function AppointmentsPage() {
                           )}
                           {sortBy === "date" && (
                             <Badge variant="outline" className="text-xs px-2 py-1">
-                              {format(new Date(appointment.datetime), "MMM dd")}
+                              {format(appointment.datetime, "MMM dd")}
                             </Badge>
                           )}
                         </div>
                         <div className="space-y-1">
                           <CardTitle className="flex items-center gap-2 text-lg group-hover:text-primary transition-colors duration-200">
                             <User className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />
-                          {appointment.doctor.firstName} {appointment.doctor.lastName}
+                            {appointment.doctor.firstName} {appointment.doctor.lastName}
                           </CardTitle>
                           <CardDescription className="flex items-center gap-1">
-                            <Stethoscope className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors duration-200" />
+                            <Stethoscope className="h-4 w-4" />
                             {appointment.doctor.specialization}
-                      
                           </CardDescription>
                         </div>
                       </div>
@@ -846,22 +886,16 @@ export default function AppointmentsPage() {
                         >
                           {appointment.status}
                         </Badge>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleCancelAppointment(appointment.id)}
-                          className="text-red-600 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(appointment)}
-                          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
-                        >
-                          <Edit3 className="h-4 w-4" />
-                        </Button>
+                        {appointment.status !== "Completed" && appointment.status !== "Cancelled" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleCancelAppointment(appointment.id)}
+                            className="text-red-600 hover:text-red-700 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all duration-200 hover:scale-110"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
@@ -869,17 +903,22 @@ export default function AppointmentsPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div className="flex items-center gap-2 group-hover:text-primary transition-colors duration-200">
                         <Stethoscope className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors duration-200" />
-                        <span className="font-medium">{appointment.service}</span>
+                        <span className="font-medium">{appointment.service.name}</span>
                       </div>
                       <div className="flex items-center gap-2 group-hover:text-primary transition-colors duration-200">
                         <Calendar className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors duration-200" />
-                        <span>{format(new Date(appointment.datetime), "MMM dd, yyyy")}</span>
+                        <span>{format(appointment.datetime, "MMM dd, yyyy")}</span>
                       </div>
                       <div className="flex items-center gap-2 group-hover:text-primary transition-colors duration-200">
                         <Clock className="h-4 w-4 text-muted-foreground group-hover:text-primary transition-colors duration-200" />
-                        <span>{format(new Date(appointment.datetime), "hh:mm a")}</span>
+                        <span>{format(appointment.datetime, "hh:mm a")}</span>
                       </div>
                     </div>
+                    {appointment.notes && (
+                      <div className="mt-3 p-2 bg-gray-50 rounded-md">
+                        <p className="text-sm text-gray-600">{appointment.notes}</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               ))}

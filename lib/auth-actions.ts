@@ -1,95 +1,74 @@
 "use server"
 
-import prisma from "./prisma"
-import { cookies } from "next/headers"
-import { redirect } from "next/navigation"
-import bcrypt from "bcrypt"
+import prisma  from "./prisma"
+import { z } from "zod"
+import { revalidatePath } from "next/cache"
+import { NextRequest } from "next/server"
 import jwt from "jsonwebtoken"
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret'
+const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret"
 
-export async function loginDoctor(formData: FormData) {
+export async function getCurrentPatient(request?: NextRequest) {
   try {
-    const email = formData.get("email") as string
-    const password = formData.get("password") as string
-
-    if (!email || !password) {
-      return { success: false, message: "Email and password are required" }
+    if (!request || !request.cookies) {
+      return null
     }
-
-    // Find doctor by email
-    const doctor = await prisma.doctor.findUnique({
-      where: { email },
-    })
-    console.log("Doctor found:", doctor)
-    if (!doctor) {
-      return { success: false, message: "Invalid email or password" }
+    // Await cookies if it's a Promise
+    const cookies = await request.cookies
+    if (typeof (cookies as any).get !== "function") {
+      return null
     }
-    console.log("Doctor password hash:", doctor.password)
-    // Compare password using bcrypt
-    const passwordMatch = await bcrypt.compare(password, doctor.password)
-    console.log("Password match result:", passwordMatch)
-    if (!passwordMatch) {
-      return { success: false, message: "Invalid email or password" }
-    }
-
-    // Generate JWT token
-    const token = jwt.sign({ doctorId: doctor.id, email: doctor.email }, JWT_SECRET, {
-      expiresIn: '1h',
-    })
-
-    // Set token cookie
-    const cookieStore = await cookies()
-    cookieStore.set("token", token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60, // 1 hour
-      path: "/",
-    })
-
-    return { success: true, message: "Login successful", doctorId: doctor.id }
-  } catch (error) {
-    console.log("Full error object:", error);
-    console.error("Error logging in doctor:", error)
-    return { success: false, message: "Login failed. Please try again." }
-  }
-}
-
-export async function logoutDoctor() {
-  try {
-    const cookieStore = await cookies()
-    cookieStore.delete("token")
-    redirect("/doctor/login")
-  } catch (error) {
-    console.error("Error logging out:", error)
-  }
-}
-
-export async function getCurrentDoctor() {
-  try {
-    const cookieStore = await cookies()
-    const sessionCookie = cookieStore.get("token")
-
-    if (!sessionCookie) {
+    const token = (cookies as any).get("token")?.value
+    if (!token) {
       return null
     }
 
-    const payload = jwt.verify(sessionCookie.value, JWT_SECRET) as { doctorId: number; email: string }
+    const decoded = jwt.verify(token, JWT_SECRET) as { patientId?: number, userType?: string }
+    if (decoded.userType !== "patient") {
+      return null
+    }
+    const patientId = decoded.patientId
+    if (!patientId) {
+      return null
+    }
 
-    if (!payload || !payload.doctorId) {
+    const patient = await prisma.patient.findUnique({
+      where: { id: patientId },
+    })
+
+    return patient
+  } catch (error) {
+    console.error("Error getting current patient:", error)
+    return null
+  }
+}
+
+export async function getCurrentDoctor(request?: NextRequest) {
+  try {
+    if (!request || !request.cookies) {
+      return null
+    }
+    // Await cookies if it's a Promise
+    const cookies = await request.cookies
+    if (typeof (cookies as any).get !== "function") {
+      return null
+    }
+    const token = (cookies as any).get("token")?.value
+    if (!token) {
+      return null
+    }
+
+    const decoded = jwt.verify(token, JWT_SECRET) as { doctorId?: number, userType?: string }
+    if (decoded.userType !== "doctor") {
+      return null
+    }
+    const doctorId = decoded.doctorId
+    if (!doctorId) {
       return null
     }
 
     const doctor = await prisma.doctor.findUnique({
-      where: { id: payload.doctorId },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        email: true,
-        specialization: true,
-      },
+      where: { id: doctorId },
     })
 
     return doctor
@@ -99,10 +78,87 @@ export async function getCurrentDoctor() {
   }
 }
 
-export async function requireAuth() {
-  const doctor = await getCurrentDoctor()
-  if (!doctor) {
-    redirect("/doctor/login")
+// Login validation schemas
+const patientLoginSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+})
+
+const doctorLoginSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+})
+
+export async function loginPatient(formData: FormData) {
+  try {
+    const email = formData.get("email") as string
+    const password = formData.get("password") as string
+
+    const validatedData = patientLoginSchema.parse({ email, password })
+
+    // In a real app, you would verify the password hash
+    const patient = await prisma.patient.findUnique({
+      where: { email: validatedData.email },
+    })
+
+    if (!patient) {
+      return { success: false, message: "Invalid email or password" }
+    }
+
+    // Mock password check - in real app, use bcrypt.compare()
+    if (patient.password !== validatedData.password) {
+      return { success: false, message: "Invalid email or password" }
+    }
+
+    // In a real app, you would create a session/JWT here
+    revalidatePath("/")
+    return { success: true, message: "Login successful", patient }
+  } catch (error) {
+    console.error("Error logging in patient:", error)
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        message: "Validation error",
+        errors: error.errors.map((e) => `${e.path.join(".")}: ${e.message}`),
+      }
+    }
+    return { success: false, message: "Login failed" }
   }
-  return doctor
+}
+
+export async function loginDoctor(formData: FormData) {
+  try {
+    const email = formData.get("email") as string
+    const password = formData.get("password") as string
+
+    const validatedData = doctorLoginSchema.parse({ email, password })
+
+    // In a real app, you would verify the password hash
+    const doctor = await prisma.doctor.findUnique({
+      where: { email: validatedData.email },
+    })
+
+    if (!doctor) {
+      return { success: false, message: "Invalid email or password" }
+    }
+
+    // Mock password check - in real app, use bcrypt.compare()
+    if (doctor.password !== validatedData.password) {
+      return { success: false, message: "Invalid email or password" }
+    }
+
+    // In a real app, you would create a session/JWT here
+    revalidatePath("/")
+    return { success: true, message: "Login successful", doctor }
+  } catch (error) {
+    console.error("Error logging in doctor:", error)
+    if (error instanceof z.ZodError) {
+      return {
+        success: false,
+        message: "Validation error",
+        errors: error.errors.map((e) => `${e.path.join(".")}: ${e.message}`),
+      }
+    }
+    return { success: false, message: "Login failed" }
+  }
 }
