@@ -1,16 +1,81 @@
-doctorId: number
-  serviceId: number
-  date: string
-  time: string
-}) {
-  try {
-    const patient = await getCurrentPatient()
+try {
+    const patient = await getCurrentPatient(request)
+    if (!patient) {
+      throw new Error("Patient not authenticated")
+    }
+
+    const appointments = await prisma.appointment.findMany({
+      where: { patientId: patient.id },
+      include: {
+        doctor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            specialization: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+        },
+      },
+      orderBy: {
+        datetime: "asc",
+      },
+    })
+
+    // Add priority based on order
+    const appointmentsWithPriority = appointments.map((appointment, index) => ({
+      ...appointment,
+      priority: index + 1,
+    }))
+
+    return appointmentsWithPriority
+  } catch (error) {
+    console.error("Error fetching patient appointments:", error)
+    throw new Error("Failed to fetch appointments")
+  }
+}
 =======
-export async function bookAppointment(data: {
-  doctorId: number
-  serviceId: number
-  date: string
-  time: string
-}, request?: NextRequest) {
+export async function getPatientAppointments(request?: NextRequest) {
   try {
     const patient = await getCurrentPatient(request)
+    if (!patient) {
+      throw new Error("Patient not authenticated")
+    }
+
+    const appointments = await prisma.appointment.findMany({
+      where: { patientId: patient.id },
+      include: {
+        doctor: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            specialization: true,
+          },
+        },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+          },
+        },
+      },
+      orderBy: {
+        priority: "asc",
+      },
+    })
+
+    // Return appointments with stored priority (do not override)
+    return appointments
+  } catch (error) {
+    console.error("Error fetching patient appointments:", error)
+    throw new Error("Failed to fetch appointments")
+  }
+}

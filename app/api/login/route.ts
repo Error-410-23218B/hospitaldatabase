@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
         firstName: true,
         lastName: true,
         dob: true,
+        twoFactorEnabled: true,
+        smsenabled: true,
       },
     });
 
@@ -37,6 +39,13 @@ export async function POST(request: NextRequest) {
 
     if (!passwordMatch) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
+    }
+
+    if (patient.twoFactorEnabled || patient.smsenabled) {
+      // 2FA is enabled or SMS 2FA is enabled, require 2FA token verification
+      const responseJson = { message: '2FA required', twoFactorEnabled: true, patientId: patient.id };
+      console.log("Login API 2FA response:", responseJson);
+      return NextResponse.json(responseJson);
     }
 
     const token = jwt.sign({ userType: 'patient', patientId: patient.id, email: patient.email }, JWT_SECRET, {

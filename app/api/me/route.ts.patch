@@ -1,0 +1,42 @@
+const doctor = await prisma.doctor.findUnique({
+        where: { id: decoded.doctorId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          specialization: true,
+        },
+      });
+
+      if (!doctor) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
+      return NextResponse.json({ user: doctor });
+    }
+=======
+    if (decoded.doctorId) {
+      const doctor = await prisma.doctor.findUnique({
+        where: { id: decoded.doctorId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          specialization: true,
+        },
+      });
+
+      if (!doctor) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
+      // Add name field combining firstName and lastName for frontend display
+      const user = {
+        ...doctor,
+        name: doctor.firstName ? `${doctor.firstName} ${doctor.lastName ?? ''}`.trim() : undefined,
+      };
+
+      return NextResponse.json({ user });
+    }

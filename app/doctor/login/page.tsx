@@ -12,7 +12,7 @@ import { useAuth } from "@/lib/auth-context"
 export default function DoctorLoginPage() {
   const [showPassword, setShowPassword] = useState(false)
   const router = useRouter()
-  const { user, loading } = useAuth()
+  const { user, loading, refreshUser } = useAuth()
   const [loginState, setLoginState] = useState({ success: false, message: "" })
   const [isPending, setIsPending] = useState(false)
 
@@ -44,6 +44,7 @@ export default function DoctorLoginPage() {
 
       if (response.ok) {
         setLoginState({ success: true, message: "Login successful" })
+        await refreshUser()
         // Use setTimeout to ensure state updates before redirect
         setTimeout(() => {
           router.push("/doctor/appointments")

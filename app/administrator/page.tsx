@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect, useActionState } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -100,6 +102,9 @@ type Patient = {
 }
 
 export default function AdministratorPage() {
+  const router = useRouter()
+  const { user, loading } = useAuth()
+
   const [doctors, setDoctors] = useState<Doctor[]>([])
   const [patients, setPatients] = useState<Patient[]>([])
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null)
@@ -140,6 +145,18 @@ export default function AdministratorPage() {
     },
     { success: false, message: "" },
   )
+
+  useEffect(() => {
+    if (!loading) {
+      if (!user) {
+        // Wait for user to load before redirecting
+        return
+      }
+      if (user.role !== "admin") {
+        router.replace("/")
+      }
+    }
+  }, [loading, user, router])
 
   useEffect(() => {
     loadData()
@@ -241,7 +258,7 @@ export default function AdministratorPage() {
       doctor.specialization.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
-  if (isLoading) {
+  if (loading || isLoading) {
     return (
       <div className="container mx-auto py-8 px-4">
         <div className="flex items-center justify-center min-h-[400px]">
@@ -252,6 +269,10 @@ export default function AdministratorPage() {
         </div>
       </div>
     )
+  }
+
+  if (!user || user.role !== "admin") {
+    return null
   }
 
   return (

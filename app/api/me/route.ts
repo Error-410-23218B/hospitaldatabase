@@ -34,7 +34,39 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'User not found' }, { status: 404 });
       }
 
-      return NextResponse.json({ user: doctor });
+      // Add name field combining firstName and lastName for frontend display
+      const user = {
+        ...doctor,
+        name: doctor.firstName ? `${doctor.firstName} ${doctor.lastName ?? ''}`.trim() : undefined,
+      };
+
+      return NextResponse.json({ user });
+    }
+
+    if (decoded.staffId) {
+      const staff = await prisma.staff.findUnique({
+        where: { id: decoded.staffId },
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          role: true,
+        },
+      });
+
+      if (!staff) {
+        return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      }
+
+      const user = {
+        id: staff.id,
+        name: staff.firstName ? `${staff.firstName} ${staff.lastName ?? ''}`.trim() : undefined,
+        email: staff.email,
+        role: staff.role,
+      };
+
+      return NextResponse.json({ user });
     }
 
     if (decoded.email || decoded.patientId) {

@@ -35,10 +35,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
     }
 
-    console.log("Stored password hash:", doctor.password)
     // Compare password
     const passwordMatch = await bcrypt.compare(password, doctor.password);
-    console.log("Password match result:", passwordMatch)
 
     if (!passwordMatch) {
       return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });

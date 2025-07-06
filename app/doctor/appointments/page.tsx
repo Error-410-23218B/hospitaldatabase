@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useActionState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -114,6 +115,8 @@ type Service = {
 }
 
 export default function DoctorAppointmentsPage() {
+  const router = useRouter()
+
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [patients, setPatients] = useState<Patient[]>([])
   const [services, setServices] = useState<Service[]>([])
@@ -161,6 +164,12 @@ export default function DoctorAppointmentsPage() {
   )
 
   const { user, loading } = useAuth()
+
+  useEffect(() => {
+    if (!loading && (!user || !user.specialization)) {
+      router.push("/doctor/login")
+    }
+  }, [user, loading, router])
 
   useEffect(() => {
     if (user && !loading) {

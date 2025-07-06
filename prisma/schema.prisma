@@ -101,6 +101,10 @@ model Patient {
   dob            DateTime
   email          String           @unique
   password       String
+  phone          String?          // added phone number field for SMS 2FA
+  twoFactorEnabled Boolean         @default(false)
+  twoFactorSecret String?          // nullable field for 2FA secret
+  smsenabled     Boolean          @default(false)
   avatar         String?
   bio            String?
   address        Address?         @relation(fields: [addressId], references: [id])
@@ -186,4 +190,15 @@ model Appointment {
   patientId  Int
   service    Service   @relation(fields: [serviceId], references: [id])
   serviceId  Int
+}
+
+model Staff {
+  id        Int     @id @default(autoincrement())
+  email     String  @unique
+  password  String
+  firstName String?
+  lastName  String?
+  role      String  @default("admin")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

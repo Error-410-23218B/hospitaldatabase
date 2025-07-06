@@ -114,6 +114,8 @@ export async function updatePatientProfile(patientId: number, formData: FormData
       emergencyName: formData.get("emergencyName") as string | null,
       emergencyRelationship: formData.get("emergencyRelationship") as string | null,
       emergencyPhone: formData.get("emergencyPhone") as string | null,
+      // Phone number
+      phone: formData.get("phone") as string | null,
       // Medical info data
       bloodType: formData.get("bloodType") as string | null,
       allergies: formData.get("allergies") as string | null,
@@ -158,7 +160,7 @@ export async function updatePatientProfile(patientId: number, formData: FormData
     // Start transaction
     await prisma.$transaction(async (tx) => {
       // Update personal information if present
-      if (isPersonalUpdate) {
+        if (isPersonalUpdate) {
         const personalData: any = {}
 
         if (rawData.firstName) personalData.firstName = rawData.firstName
@@ -166,6 +168,7 @@ export async function updatePatientProfile(patientId: number, formData: FormData
         if (rawData.email) personalData.email = rawData.email
         if (rawData.bio !== null) personalData.bio = rawData.bio
         if (rawData.dob) personalData.dob = rawData.dob
+        if (rawData.phone) personalData.phone = rawData.phone
 
         if (Object.keys(personalData).length > 0) {
           await tx.patient.update({

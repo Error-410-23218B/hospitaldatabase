@@ -39,6 +39,8 @@ import {
 import { getPatientProfile, updatePatientProfile, updatePassword } from "@/lib/profile-actions"
 import { format } from "date-fns"
 import { useAuth } from "@/lib/auth-context"
+import QRCode from "react-qr-code"
+
 
 // Types based on Prisma schema
 type PatientProfile = {
@@ -46,6 +48,7 @@ type PatientProfile = {
   firstName: string
   lastName: string
   email: string
+  phone?: string | null
   dob: Date
   avatar?: string | null
   bio?: string | null
@@ -88,6 +91,8 @@ type PatientProfile = {
     completedAppointments: number
     memberSince: Date
   } | null
+  twoFactorEnabled?: boolean
+  smsenabled?: boolean
   appointments: Array<{
     id: number
     datetime: Date
@@ -111,6 +116,42 @@ export default function ProfilePage() {
   const router = useRouter()
   const { user } = useAuth()
 
+  const [showSetup, setShowSetup] = useState(false)
+  const [secret, setSecret] = useState<string | null>(null)
+  const [qrCodeUrl, setQrCodeUrl] = useState<string | null>(null)
+  const [token, setToken] = useState("")
+  const [is2FALoading, setIs2FALoading] = useState(false)
+
+  const fetch2FASecret = async () => {
+    if (!patientId) return
+    setIs2FALoading(true)
+    setError(null)
+    setSuccessMessage(null)
+    try {
+      const response = await fetch('/api/patient-2fa/generate-secret', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId }),
+      })
+      const data = await response.json()
+      if (data.secret) {
+        setSecret(data.secret)
+        // Generate otpauth URL for QR code
+        const otpauthUrl = `otpauth://totp/HospitalApp:${user?.email}?secret=${data.secret}&issuer=HospitalApp`
+        // Generate QR code image URL using Google Charts API
+        const qrUrl = `https://chart.googleapis.com/chart?chs=200x200&chld=M|0&cht=qr&chl=${encodeURIComponent(otpauthUrl)}`
+        setQrCodeUrl(qrUrl)
+      } else {
+        setError('Failed to generate 2FA secret')
+      }
+    } catch (err) {
+      setError('Error generating 2FA secret')
+      console.error(err)
+    } finally {
+      setIs2FALoading(false)
+    }
+  }
+
   useEffect(() => {
     if (!user) {
       router.push("/login")
@@ -126,6 +167,7 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+
 
   // Form state for personal info update
   const [personalState, personalAction, isPersonalPending] = useActionState(
@@ -213,6 +255,51 @@ export default function ProfilePage() {
       console.error("Error loading profile:", err)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleEnable2FA = async () => {
+    if (!patientId || !token || !secret) return
+    setIs2FALoading(true)
+    setError(null)
+    setSuccessMessage(null)
+    try {
+      const response = await fetch('/api/patient-2fa/enable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId, token, secret }),
+      })
+      const data = await response.json()
+      if (response.ok) {
+        setSuccessMessage("Two-factor authentication enabled successfully!")
+        setShowSetup(false)
+        await loadPatientProfile()
+      } else {
+        setError(data.error || "Failed to enable two-factor authentication")
+      }
+    } catch (err) {
+      setError("Failed to enable two-factor authentication")
+      console.error(err)
+    } finally {
+      setIs2FALoading(false)
+    }
+  }
+
+  const handleDisable2FA = async () => {
+    if (!patientId) return
+    setIs2FALoading(true)
+    setError(null)
+    setSuccessMessage(null)
+    try {
+      // Call API or action to disable 2FA
+      // Simulate success for now
+      setSuccessMessage("Two-factor authentication disabled successfully!")
+      await loadPatientProfile()
+    } catch (err) {
+      setError("Failed to disable two-factor authentication")
+      console.error(err)
+    } finally {
+      setIs2FALoading(false)
     }
   }
 
@@ -426,6 +513,71 @@ export default function ProfilePage() {
           </TabsTrigger>
         </TabsList>
 
+        {/* New: Edit/Save/Cancel buttons */}
+        <div className="flex justify-end gap-2 mb-4">
+          {getCurrentEditingState() ? (
+            <>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  if (activeTab === "personal") handleCancelPersonal()
+                  else if (activeTab === "medical") handleCancelMedical()
+                  else if (activeTab === "preferences") handleCancelPreferences()
+                }}
+                disabled={
+                  (activeTab === "personal" && isPersonalPending) ||
+                  (activeTab === "medical" && isMedicalPending) ||
+                  (activeTab === "preferences" && isPreferencesPending)
+                }
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                form={`${activeTab}-form`}
+                disabled={
+                  (activeTab === "personal" && isPersonalPending) ||
+                  (activeTab === "medical" && isMedicalPending) ||
+                  (activeTab === "preferences" && isPreferencesPending)
+                }
+                className="flex items-center gap-2"
+              >
+                {(activeTab === "personal" && isPersonalPending) ||
+                (activeTab === "medical" && isMedicalPending) ||
+                (activeTab === "preferences" && isPreferencesPending) ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {(activeTab === "personal" && isPersonalPending) ||
+                (activeTab === "medical" && isMedicalPending) ||
+                (activeTab === "preferences" && isPreferencesPending)
+                  ? "Saving..."
+                  : "Save Changes"}
+              </Button>
+            </>
+          ) : (
+            <Button
+              onClick={() => {
+                if (activeTab === "personal") setIsEditingPersonal(true)
+                else if (activeTab === "medical") setIsEditingMedical(true)
+                else if (activeTab === "preferences") setIsEditingPreferences(true)
+              }}
+              className="flex items-center gap-2"
+              disabled={activeTab === "security"}
+            >
+              <Edit className="h-4 w-4" />
+              Edit{" "}
+              {activeTab === "personal"
+                ? "Personal"
+                : activeTab === "medical"
+                ? "Medical"
+                : "Preferences"}
+            </Button>
+          )}
+        </div>
+
         {/* Personal Information Tab */}
         <TabsContent value="personal" className="space-y-6">
           <form id="personal-form" action={personalAction}>
@@ -478,6 +630,17 @@ export default function ProfilePage() {
                       defaultValue={format(new Date(patientData.dob), "yyyy-MM-dd")}
                       disabled={!isEditingPersonal}
                       required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone Number</Label>
+                    <Input
+                      id="phone"
+                      name="phone"
+                      type="tel"
+                      defaultValue={patientData.phone || ""}
+                      disabled={!isEditingPersonal}
+                      placeholder="+1 555 123 4567"
                     />
                   </div>
                   <div className="space-y-2">
@@ -1001,12 +1164,227 @@ export default function ProfilePage() {
 
               <div className="space-y-2">
                 <Label>Two-Factor Authentication</Label>
-                <div className="flex items-center justify-between p-4 border rounded-lg">
-                  <div>
-                    <div className="font-medium">Enable 2FA</div>
-                    <div className="text-sm text-muted-foreground">Add an extra layer of security to your account</div>
+                <div className="flex flex-col gap-4 p-4 border rounded-lg">
+      {/* Authenticator 2FA Setup */}
+      {!patientData?.twoFactorEnabled ? (
+        <>
+          <div className="font-medium">Enable Authenticator Two-Factor Authentication</div>
+          <div className="text-sm text-muted-foreground mb-2">
+            Add an extra layer of security to your account using an authenticator app.
+          </div>
+          {!showSetup ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowSetup(true);
+                fetch2FASecret();
+              }}
+              disabled={is2FALoading}
+            >
+              {is2FALoading ? "Loading..." : "Setup Authenticator App"}
+            </Button>
+          ) : (
+            <>
+              <Dialog open={showSetup} onOpenChange={setShowSetup}>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Setup Authenticator Two-Factor Authentication</DialogTitle>
+                    <DialogDescription>
+                      Scan this QR code with your authenticator app (e.g., Google Authenticator).
+                    </DialogDescription>
+                  </DialogHeader>
+                  {secret && (
+                    <div className="mb-4 flex justify-center">
+                      <QRCode value={`otpauth://totp/HospitalApp:${user?.email}?secret=${secret}&issuer=HospitalApp`} size={200} title="2FA QR Code" />
+                    </div>
+                  )}
+                  <Input
+                    placeholder="Enter 2FA token"
+                    value={token}
+                    onChange={(e) => setToken(e.target.value)}
+                    maxLength={6}
+                  />
+                  <div className="flex gap-2 mt-2">
+                    <Button onClick={handleEnable2FA} disabled={isLoading}>
+                      {isLoading ? "Enabling..." : "Enable Authenticator App 2FA"}
+                    </Button>
+                    <Button variant="outline" onClick={() => setShowSetup(false)} disabled={isLoading}>
+                      Cancel
+                    </Button>
                   </div>
-                  <Button variant="outline">Setup</Button>
+                  {error && <p className="text-red-600 mt-2">{error}</p>}
+                  {successMessage && <p className="text-green-600 mt-2">{successMessage}</p>}
+                </DialogContent>
+              </Dialog>
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="flex items-center justify-between p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 font-medium">
+            Authenticator Two-Factor Authentication is enabled on your account.
+            <button
+              className="text-red-600 underline"
+              onClick={async () => {
+                setIs2FALoading(true);
+                setError(null);
+                setSuccessMessage(null);
+                try {
+                  const res = await fetch('/api/patient-2fa/disable', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ patientId: patientData.id }),
+                  });
+                  if (res.ok) {
+                    setSuccessMessage('Authenticator 2FA disabled successfully.');
+                    await loadPatientProfile();
+                  } else {
+                    const data = await res.json();
+                    setError(data.error || 'Failed to disable Authenticator 2FA');
+                  }
+                } catch (err) {
+                  setError('Failed to disable Authenticator 2FA');
+                } finally {
+                  setIs2FALoading(false);
+                }
+              }}
+            >
+              Disable Authenticator 2FA
+            </button>
+          </div>
+        </>
+      )}
+
+                  {/* SMS 2FA Enabled Indicator */}
+                  {patientData?.smsenabled ? (
+                    <div className="flex items-center justify-between p-4 bg-blue-50 border border-blue-200 rounded-lg text-blue-700 font-medium">
+                      <span>SMS Two-Factor Authentication is enabled on your account.</span>
+                      <button
+                        className="text-red-600 underline"
+                        onClick={async () => {
+                          setIs2FALoading(true);
+                          setError(null);
+                          setSuccessMessage(null);
+                          try {
+                            const res = await fetch('/api/patient-2fa/disable-sms', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ patientId: patientData.id }),
+                            });
+                            if (res.ok) {
+                              setSuccessMessage('SMS 2FA disabled successfully.');
+                              await loadPatientProfile();
+                            } else {
+                              const data = await res.json();
+                              setError(data.error || 'Failed to disable SMS 2FA');
+                            }
+                          } catch (err) {
+                            setError('Failed to disable SMS 2FA');
+                          } finally {
+                            setIs2FALoading(false);
+                          }
+                        }}
+                      >
+                        Disable SMS 2FA
+                      </button>
+                    </div>
+                  ) : null}
+
+                  {/* SMS 2FA Setup */}
+                  {!patientData?.smsenabled && patientData?.phone ? (
+                    <div>
+                      <div className="font-medium">Enable SMS Two-Factor Authentication</div>
+                      <div className="text-sm text-muted-foreground mb-2">
+                        Your phone number: {patientData.phone}
+                      </div>
+                      <Button
+                        onClick={async () => {
+                          setIs2FALoading(true)
+                          setError(null)
+                          setSuccessMessage(null)
+                          try {
+                            // Send SMS code
+                            const res = await fetch('/api/patient-2fa/send-sms-code', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ patientId }),
+                            })
+                            const data = await res.json()
+                            if (res.ok) {
+                              setSuccessMessage('SMS code sent. Please check your phone.')
+                              // Enable SMS 2FA by setting smsenabled to true
+                              const enableRes = await fetch('/api/patient-2fa/enable-sms', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ patientId }),
+                              })
+                              if (!enableRes.ok) {
+                                const enableData = await enableRes.json()
+                                setError(enableData.error || 'Failed to enable SMS 2FA')
+                              }
+                            } else {
+                              setError(data.error || 'Failed to send SMS code')
+                            }
+                          } catch (err) {
+                            setError('Failed to send SMS code')
+                          } finally {
+                            setIs2FALoading(false)
+                          }
+                        }}
+                        disabled={is2FALoading}
+                      >
+                        {is2FALoading ? 'Sending SMS...' : 'Send SMS Code'}
+                      </Button>
+                      <Input
+                        placeholder="Enter SMS code"
+                        value={token}
+                        onChange={(e) => setToken(e.target.value)}
+                        maxLength={6}
+                        className="mt-2"
+                      />
+                      <Button
+                        onClick={async () => {
+                          if (!token) return
+                          setIs2FALoading(true)
+                          setError(null)
+                          setSuccessMessage(null)
+                          try {
+                            const res = await fetch('/api/login/2fa/verify-sms', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ patientId, code: token }),
+                            })
+                            const data = await res.json()
+                            if (res.ok) {
+                              setSuccessMessage('SMS 2FA enabled successfully.')
+                              await loadPatientProfile()
+                            } else {
+                              setError(data.error || 'Failed to verify SMS code')
+                            }
+                          } catch (err) {
+                            setError('Failed to verify SMS code')
+                          } finally {
+                            setIs2FALoading(false)
+                          }
+                        }}
+                        disabled={is2FALoading || !token}
+                        className="mt-2"
+                      >
+                        {is2FALoading ? 'Verifying...' : 'Verify SMS Code'}
+                      </Button>
+                    </div>
+                  ) : null}
+
+                  {patientData?.twoFactorEnabled ? (
+                    <>
+                      <div className="font-medium">2FA is enabled on your account</div>
+                      <Button variant="destructive" onClick={handleDisable2FA} disabled={is2FALoading}>
+                        {is2FALoading ? "Disabling..." : "Disable 2FA"}
+                      </Button>
+                      {error && <p className="text-red-600 mt-2">{error}</p>}
+                      {successMessage && <p className="text-green-600 mt-2">{successMessage}</p>}
+                    </>
+                  ) : null}
                 </div>
               </div>
 

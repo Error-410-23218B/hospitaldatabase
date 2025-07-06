@@ -40,16 +40,23 @@ export default function LoginPage() {
       })
 
       const data = await response.json()
+      console.log("Login response data:", data)
 
       if (response.ok) {
-        setMessage("Login successful!")
-        setFormData({ email: "", password: "" })
-        if (data.user) {
-          setUser(data.user)
+        if (data.twoFactorEnabled) {
+          console.log("Redirecting to 2FA page with patientId:", data.patientId)
+          // Redirect to 2FA verification page with patientId
+          window.location.href = `/login/2fa?patientId=${data.patientId}`
+        } else {
+          setMessage("Login successful!")
+          setFormData({ email: "", password: "" })
+          if (data.user) {
+            setUser(data.user)
+            await refreshUser()
+          }
+          await router.push("/")
           await refreshUser()
         }
-        await router.push("/")
-        await refreshUser()
       } else {
         setMessage(data.error || "Login failed")
       }

@@ -136,10 +136,14 @@ export default function AppointmentsPage() {
   const dragCounter = useRef(0)
 
   useEffect(() => {
-    if (!loading && !user) {
-      router.push("/login")
+    if (!loading) {
+      if (!user) {
+        router.push("/login")
+      } else if (user.specialization) {
+        router.push("/doctor/appointments")
+      }
     }
-  }, [loading, user, router])
+  }, [loading, user])
 
   useEffect(() => {
     loadInitialData()
