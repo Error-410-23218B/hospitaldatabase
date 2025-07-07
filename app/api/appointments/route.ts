@@ -87,9 +87,10 @@ export async function GET(request: NextRequest) {
         doctor: true,
         service: true,
       },
-      orderBy: {
-        datetime: "asc",
-      },
+      orderBy: [
+        { priority: "asc" },
+        { datetime: "asc" },
+      ],
     })
 
     return NextResponse.json({ appointments })

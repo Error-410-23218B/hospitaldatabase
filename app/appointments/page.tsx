@@ -341,7 +341,7 @@ export default function AppointmentsPage() {
     }
   }
 
-  const handleDrop = (e: React.DragEvent, targetId: number) => {
+  const handleDrop = async (e: React.DragEvent, targetId: number) => {
     if (sortBy !== "priority") return
     e.preventDefault()
 
@@ -371,9 +371,25 @@ export default function AppointmentsPage() {
     setDraggedItem(null)
     setDragOverItem(null)
     dragCounter.current = 0
+
+    // Persist priority changes to backend
+    try {
+      const response = await fetch('/api/appointments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          updatedAppointments.map(({ id, priority }) => ({ id, priority }))
+        ),
+      })
+      if (!response.ok) {
+        console.error('Failed to update appointment priorities')
+      }
+    } catch (error) {
+      console.error('Error updating appointment priorities:', error)
+    }
   }
 
-  const movePriority = (id: number, direction: "up" | "down") => {
+  const movePriority = async (id: number, direction: "up" | "down") => {
     if (sortBy !== "priority") return
 
     const currentIndex = appointments.findIndex((apt) => apt.id === id)
@@ -392,6 +408,22 @@ export default function AppointmentsPage() {
     }))
 
     setAppointments(updatedAppointments)
+
+    // Persist priority changes to backend
+    try {
+      const response = await fetch('/api/appointments', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(
+          updatedAppointments.map(({ id, priority }) => ({ id, priority }))
+        ),
+      })
+      if (!response.ok) {
+        console.error('Failed to update appointment priorities')
+      }
+    } catch (error) {
+      console.error('Error updating appointment priorities:', error)
+    }
   }
 
   const handleSort = (option: SortOption) => {

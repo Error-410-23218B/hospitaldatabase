@@ -32,9 +32,10 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      orderBy: {
-        datetime: "asc",
-      },
+      orderBy: [
+        { priority: "asc" },
+        { datetime: "asc" },
+      ],
     })
 
     return NextResponse.json(appointments)

@@ -192,6 +192,7 @@ export default function DoctorProfilePage() {
         setSuccessMessage("Preferences updated successfully!")
         setIsEditingPreferences(false)
         await loadDoctorProfile()
+        window.location.reload()
       }
       return result
     },
@@ -1040,6 +1041,12 @@ export default function DoctorProfilePage() {
                       <SelectContent>
                         <SelectItem value="light">Light</SelectItem>
                         <SelectItem value="dark">Dark</SelectItem>
+                        <SelectItem value="solarized-dark">Solarized Dark</SelectItem>
+                        <SelectItem value="forest-green">Forest Green</SelectItem>
+                        <SelectItem value="sunset-orange">Sunset Orange</SelectItem>
+                        <SelectItem value="ocean-breeze">Ocean Breeze</SelectItem>
+                        <SelectItem value="classic-sepia">Classic Sepia</SelectItem>
+                        <SelectItem value="high-contrast">High Contrast</SelectItem>
                         <SelectItem value="system">System</SelectItem>
                       </SelectContent>
                     </Select>

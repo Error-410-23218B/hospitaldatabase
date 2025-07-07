@@ -1,16 +1,42 @@
+"use client"
+
 import type React from "react"
-import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import Header from "./components/Header"
 import { AuthProvider } from "@/lib/auth-context"
+import { useEffect, useState } from "react"
+import { useAuth } from "@/lib/auth-context"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export const metadata: Metadata = {
-  title: "MedCare Hospital - Your Health is Our Priority",
-  description:
-    "Experience world-class healthcare with our team of expert doctors, state-of-the-art facilities, and compassionate care.",
+function ThemeWrapper({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth()
+  const [theme, setTheme] = useState("light")
+
+  useEffect(() => {
+    if (user?.preferences?.theme) {
+      setTheme(user.preferences.theme)
+    }
+  }, [user])
+
+  useEffect(() => {
+    // Remove all theme classes
+    document.documentElement.classList.remove(
+      "light",
+      "dark",
+      "solarized-dark",
+      "forest-green",
+      "sunset-orange",
+      "ocean-breeze",
+      "classic-sepia",
+      "high-contrast"
+    )
+    // Add the current theme class
+    document.documentElement.classList.add(theme)
+  }, [theme])
+
+  return <>{children}</>
 }
 
 export default function RootLayout({
@@ -22,8 +48,10 @@ export default function RootLayout({
     <html lang="en">
       <body className={inter.className}>
         <AuthProvider>
-          <Header />
-          {children}
+          <ThemeWrapper>
+            <Header />
+            {children}
+          </ThemeWrapper>
         </AuthProvider>
       </body>
     </html>

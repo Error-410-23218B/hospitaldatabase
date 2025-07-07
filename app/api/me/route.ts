@@ -12,13 +12,13 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as { email?: string; id?: number; doctorId?: number; patientId?: number };
+const decoded = jwt.verify(token, JWT_SECRET) as { email?: string; id?: number; doctorId?: number; patientId?: number; staffId?: number };
 
     if (!decoded.email && !decoded.doctorId && !decoded.patientId) {
       return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
     }
 
-    if (decoded.doctorId) {
+if (decoded.doctorId) {
       const doctor = await prisma.doctor.findUnique({
         where: { id: decoded.doctorId },
         select: {
@@ -27,6 +27,11 @@ export async function GET(request: NextRequest) {
           lastName: true,
           email: true,
           specialization: true,
+          preferences: {
+            select: {
+              theme: true,
+            },
+          },
         },
       });
 
@@ -37,6 +42,7 @@ export async function GET(request: NextRequest) {
       // Add name field combining firstName and lastName for frontend display
       const user = {
         ...doctor,
+        theme: doctor.preferences?.theme ?? "light",
         name: doctor.firstName ? `${doctor.firstName} ${doctor.lastName ?? ''}`.trim() : undefined,
       };
 
@@ -69,7 +75,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ user });
     }
 
-    if (decoded.email || decoded.patientId) {
+if (decoded.email || decoded.patientId) {
       const patient = await prisma.patient.findUnique({
         where: { email: decoded.email },
         include: {
@@ -102,6 +108,7 @@ export async function GET(request: NextRequest) {
           },
           language: patient.preferences?.language ?? 'en',
           timezone: patient.preferences?.timezone ?? 'Europe/London',
+          theme: (patient.preferences as any)?.theme ?? "light",
         },
         stats: {
           totalAppointments: patient.stats?.totalAppointments ?? 0,

@@ -35,6 +35,8 @@ model Doctor {
   email          String         @unique
   appointments   Appointment[]
   services       Service[]      @relation("DoctorServices")
+
+  testResults   TestResult[]
 }
 
 model DoctorContactInfo {
@@ -118,6 +120,8 @@ model Patient {
   stats          Stats?           @relation(fields: [statsId], references: [id])
   statsId        Int?              @unique
   appointments   Appointment[]
+
+  testResults   TestResult[]
 }
 
 model Address {
@@ -156,6 +160,7 @@ model Preferences {
   profileVisible    Boolean @default(true)
   shareData         Boolean @default(false)
   language          String  @default("en")
+  theme             String  @default("light")
   timezone          String  @default("Europe/London")
   patient           Patient?
 }
@@ -201,4 +206,32 @@ model Staff {
   role      String  @default("admin")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model TestResult {
+  id          Int       @id @default(autoincrement())
+  patient     Patient   @relation(fields: [patientId], references: [id])
+  patientId   Int
+  testName    String
+  date        DateTime
+  time        String
+  doctor      Doctor    @relation(fields: [doctorId], references: [id])
+  doctorId    Int
+  department  String
+  status      String
+  priority    String
+  notes       String?
+  downloadUrl String?
+  parameters  TestResultParameter[]
+}
+
+model TestResultParameter {
+  id           Int        @id @default(autoincrement())
+  testResult   TestResult @relation(fields: [testResultId], references: [id])
+  testResultId Int
+  parameter    String
+  value        String
+  unit         String
+  range        String
+  status       String
 }

@@ -3,7 +3,9 @@ import { bookAppointment } from "@/lib/patient-appointment-actions"
 
 export async function POST(request: NextRequest) {
   try {
-    const data = await request.json()
+    const rawBody = await request.text()
+    console.log("Raw request body:", rawBody)
+    const data = JSON.parse(rawBody)
     const result = await bookAppointment(data, request)
     if (result.success) {
       return NextResponse.json({ message: result.message })

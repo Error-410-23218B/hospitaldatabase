@@ -83,6 +83,7 @@ type PatientProfile = {
     shareData: boolean
     language: string
     timezone: string
+    theme: string
   } | null
   stats?: {
     id: number
@@ -114,7 +115,7 @@ import { useRouter } from "next/navigation"
 
 export default function ProfilePage() {
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, refreshUser, loading } = useAuth()
 
   const [showSetup, setShowSetup] = useState(false)
   const [secret, setSecret] = useState<string | null>(null)
@@ -153,10 +154,10 @@ export default function ProfilePage() {
   }
 
   useEffect(() => {
-    if (!user) {
+    if (!loading && !user) {
       router.push("/login")
     }
-  }, [user, router])
+  }, [user, loading, router])
 
   const [patientData, setPatientData] = useState<PatientProfile | null>(null)
   const [isEditingPersonal, setIsEditingPersonal] = useState(false)
@@ -205,6 +206,8 @@ export default function ProfilePage() {
         setSuccessMessage("Preferences updated successfully!")
         setIsEditingPreferences(false)
         await loadPatientProfile()
+        await refreshUser()
+        window.location.reload()
       }
       return result
     },
@@ -1100,6 +1103,30 @@ export default function ProfilePage() {
                       </SelectContent>
                     </Select>
                   </div>
+
+                  <div className="space-y-2 mt-4">
+  <Label>Theme</Label>
+  <Select
+    name="theme"
+    defaultValue={patientData.preferences?.theme || "light"}
+    disabled={!isEditingPreferences}
+  >
+    <SelectTrigger>
+      <SelectValue />
+    </SelectTrigger>
+    <SelectContent>
+      <SelectItem value="light">Light</SelectItem>
+      <SelectItem value="dark">Dark</SelectItem>
+      <SelectItem value="solarized-dark">Solarized Dark</SelectItem>
+      <SelectItem value="forest-green">Forest Green</SelectItem>
+      <SelectItem value="sunset-orange">Sunset Orange</SelectItem>
+      <SelectItem value="ocean-breeze">Ocean Breeze</SelectItem>
+      <SelectItem value="classic-sepia">Classic Sepia</SelectItem>
+      <SelectItem value="high-contrast">High Contrast</SelectItem>
+    </SelectContent>
+  </Select>
+</div>
+
                 </CardContent>
               </Card>
             </div>

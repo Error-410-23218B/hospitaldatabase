@@ -36,6 +36,7 @@ const preferencesSchema = z.object({
   shareData: z.boolean(),
   language: z.string(),
   timezone: z.string(),
+  theme: z.string().optional(),
 })
 
 const patientUpdateSchema = z.object({
@@ -130,6 +131,7 @@ export async function updatePatientProfile(patientId: number, formData: FormData
       shareData: formData.get("shareData") === "true",
       language: formData.get("language") as string | null,
       timezone: formData.get("timezone") as string | null,
+      theme: formData.get("theme") as string | null,
     }
 
     // Determine which section is being updated based on which fields are present
@@ -140,7 +142,7 @@ export async function updatePatientProfile(patientId: number, formData: FormData
       rawData.conditions !== null ||
       rawData.medications !== null
     const isPreferencesUpdate =
-      formData.has("notificationsEmail") || formData.has("language") || formData.has("timezone")
+      formData.has("notificationsEmail") || formData.has("language") || formData.has("timezone") || formData.has("theme")
 
     // Get current patient data for partial updates
     const currentPatient = await prisma.patient.findUnique({
@@ -284,24 +286,25 @@ export async function updatePatientProfile(patientId: number, formData: FormData
       // Update preferences if present
       if (isPreferencesUpdate) {
         const preferencesData = {
-          notificationsEmail: formData.has("notificationsEmail")
-            ? rawData.notificationsEmail
-            : (currentPatient.preferences?.notificationsEmail ?? true),
-          notificationsSms: formData.has("notificationsSms")
-            ? rawData.notificationsSms
-            : (currentPatient.preferences?.notificationsSms ?? false),
-          notificationsPush: formData.has("notificationsPush")
-            ? rawData.notificationsPush
-            : (currentPatient.preferences?.notificationsPush ?? true),
-          notificationsReminders: formData.has("notificationsReminders")
-            ? rawData.notificationsReminders
-            : (currentPatient.preferences?.notificationsReminders ?? true),
-          profileVisible: formData.has("profileVisible")
-            ? rawData.profileVisible
-            : (currentPatient.preferences?.profileVisible ?? true),
-          shareData: formData.has("shareData") ? rawData.shareData : (currentPatient.preferences?.shareData ?? false),
-          language: rawData.language || currentPatient.preferences?.language || "en",
-          timezone: rawData.timezone || currentPatient.preferences?.timezone || "Europe/London",
+      notificationsEmail: formData.has("notificationsEmail")
+        ? rawData.notificationsEmail
+        : (currentPatient.preferences?.notificationsEmail ?? true),
+      notificationsSms: formData.has("notificationsSms")
+        ? rawData.notificationsSms
+        : (currentPatient.preferences?.notificationsSms ?? false),
+      notificationsPush: formData.has("notificationsPush")
+        ? rawData.notificationsPush
+        : (currentPatient.preferences?.notificationsPush ?? true),
+      notificationsReminders: formData.has("notificationsReminders")
+        ? rawData.notificationsReminders
+        : (currentPatient.preferences?.notificationsReminders ?? true),
+      profileVisible: formData.has("profileVisible")
+        ? rawData.profileVisible
+        : (currentPatient.preferences?.profileVisible ?? true),
+      shareData: formData.has("shareData") ? rawData.shareData : (currentPatient.preferences?.shareData ?? false),
+      language: rawData.language || currentPatient.preferences?.language || "en",
+      timezone: rawData.timezone || currentPatient.preferences?.timezone || "Europe/London",
+      theme: rawData.theme || currentPatient.preferences?.theme || "light",
         }
 
         if (currentPatient.preferences) {

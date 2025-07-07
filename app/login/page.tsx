@@ -203,13 +203,13 @@ export default function LoginPage() {
             <h4 className="font-semibold text-blue-900 mb-2 text-sm">Demo Credentials</h4>
             <div className="text-xs text-blue-800 space-y-1">
               <p>
-                <strong>Patient:</strong> patient@example.com / password123
+                <strong>Patient:</strong> jane@doe.com / testing123
               </p>
               <p>
-                <strong>Doctor:</strong> dr.johnson@hospital.com / password123
+                <strong>Doctor:</strong> smith@hospital.com / doctorpassword123
               </p>
               <p>
-                <strong>Staff:</strong> staff@hospital.com / password123
+                <strong>Staff:</strong> staff@hospital.com / staffpassword123
               </p>
             </div>
           </CardContent>

@@ -130,6 +130,40 @@ export default function DoctorAppointmentsPage() {
   const [isScheduleDialogOpen, setIsScheduleDialogOpen] = useState(false)
   const [isPatientDetailsOpen, setIsPatientDetailsOpen] = useState(false)
   const [isRescheduleDialogOpen, setIsRescheduleDialogOpen] = useState(false)
+  const [sortByPriority, setSortByPriority] = useState(true)
+
+  // Load appointments with priority ordering
+  // Renamed to avoid duplicate declaration error
+  const loadAppointmentsWithPriority = async () => {
+    if (!user) return
+    try {
+      const response = await fetch("/api/doctor-appointments")
+      if (!response.ok) {
+        throw new Error("Failed to fetch appointments")
+      }
+      const appointmentsData = await response.json()
+      // Fix missing duration and price in service for type compatibility
+      const fixedAppointments = appointmentsData
+        .map((apt: any) => ({
+          ...apt,
+          service: {
+            ...apt.service,
+            duration: apt.service.duration ?? 0,
+            price: apt.service.price ?? 0,
+          },
+          // Normalize notes null to undefined
+          notes: apt.notes === null ? undefined : apt.notes,
+        }))
+        // Sort by priority ascending, then datetime ascending
+        .sort((a: any, b: any) => {
+          if (a.priority !== b.priority) return a.priority - b.priority
+          return new Date(a.datetime).getTime() - new Date(b.datetime).getTime()
+        })
+      setAppointments(fixedAppointments)
+    } catch (error) {
+      console.error("Error loading appointments:", error)
+    }
+  }
 
   // Form state for scheduling appointment
   const [scheduleState, scheduleAction, isSchedulePending] = useActionState(
@@ -180,7 +214,7 @@ export default function DoctorAppointmentsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true)
-      await Promise.all([loadAppointments(), loadPatients(), loadServices()])
+      await Promise.all([loadAppointmentsWithPriority(), loadPatients(), loadServices()])
     } catch (error) {
       console.error("Error loading data:", error)
     } finally {
