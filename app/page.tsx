@@ -373,10 +373,12 @@ function FluidWave({
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    let timeoutId: NodeJS.Timeout | null = null
     const observer = new IntersectionObserver(
       ([entry]) => {
+        console.log("FluidWave IntersectionObserver entry:", entry.isIntersecting)
         if (entry.isIntersecting) {
-          setTimeout(() => setIsVisible(true), delay)
+          timeoutId = setTimeout(() => setIsVisible(true), delay)
         }
       },
       { threshold: 0.1 },
@@ -386,8 +388,20 @@ function FluidWave({
       observer.observe(ref.current)
     }
 
-    return () => observer.disconnect()
-  }, [delay])
+    // Fallback: if IntersectionObserver does not trigger within 1 second, force visible
+    const fallbackTimeout = setTimeout(() => {
+      if (!isVisible) {
+        console.log("FluidWave fallback triggered")
+        setIsVisible(true)
+      }
+    }, 1000 + delay)
+
+    return () => {
+      observer.disconnect()
+      if (timeoutId) clearTimeout(timeoutId)
+      clearTimeout(fallbackTimeout)
+    }
+  }, [delay, isVisible])
 
   return (
     <div
@@ -422,17 +436,19 @@ function SmoothTypewriter({
   const ref = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    let intervalId: NodeJS.Timeout | null = null
     const observer = new IntersectionObserver(
       ([entry]) => {
+        console.log("SmoothTypewriter IntersectionObserver entry:", entry.isIntersecting)
         if (entry.isIntersecting && !isVisible) {
           setIsVisible(true)
           setTimeout(() => {
             let i = 0
-            const timer = setInterval(() => {
+            intervalId = setInterval(() => {
               setDisplayText(text.slice(0, i + 1))
               i++
               if (i >= text.length) {
-                clearInterval(timer)
+                if (intervalId) clearInterval(intervalId)
                 setTimeout(() => setShowCursor(false), 1000)
               }
             }, speed)
@@ -446,7 +462,28 @@ function SmoothTypewriter({
       observer.observe(ref.current)
     }
 
-    return () => observer.disconnect()
+    // Fallback: if IntersectionObserver does not trigger within 1 second, force animation start
+    const fallbackTimeout = setTimeout(() => {
+      if (!isVisible) {
+        console.log("SmoothTypewriter fallback triggered")
+        setIsVisible(true)
+        let i = 0
+        intervalId = setInterval(() => {
+          setDisplayText(text.slice(0, i + 1))
+          i++
+          if (i >= text.length) {
+            if (intervalId) clearInterval(intervalId)
+            setTimeout(() => setShowCursor(false), 1000)
+          }
+        }, speed)
+      }
+    }, 1000 + delay)
+
+    return () => {
+      observer.disconnect()
+      if (intervalId) clearInterval(intervalId)
+      clearTimeout(fallbackTimeout)
+    }
   }, [text, speed, delay, isVisible])
 
   return (
