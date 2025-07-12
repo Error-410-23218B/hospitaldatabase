@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState } from "react"
+import { useActionState, useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -36,6 +36,31 @@ import {
   Globe,
 } from "lucide-react"
 import { submitContactForm } from "../../actions/contact-actions"
+import SmoothReveal from "@/components/ui/animation/SmoothReveal"
+import SmoothHover from "@/components/ui/animation/SmoothHover"
+
+function useFadeInOnScroll() {
+  const ref = useRef(null)
+  const [isVisible, setIsVisible] = useState(false)
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsVisible(true)
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.1 }
+    )
+    if (ref.current) {
+      observer.observe(ref.current)
+    }
+    return () => observer.disconnect()
+  }, [])
+
+  return { ref, isVisible }
+}
 
 export default function ContactPage() {
   const [formState, formAction, isPending] = useActionState(submitContactForm, {
@@ -43,6 +68,14 @@ export default function ContactPage() {
     message: "",
     errors: {},
   })
+
+  const fadeInHeader = useFadeInOnScroll()
+  const fadeInEmergency = useFadeInOnScroll()
+  const fadeInContactMethods = useFadeInOnScroll()
+  const fadeInForm = useFadeInOnScroll()
+  const fadeInSidebar = useFadeInOnScroll()
+  const fadeInDepartments = useFadeInOnScroll()
+  const fadeInLocations = useFadeInOnScroll()
 
   const contactMethods = [
     {
@@ -54,15 +87,15 @@ export default function ContactPage() {
       color: "emerald",
       available: "24/7 Available",
     },
-{
-  icon: Mail,
-  title: "Email Support",
-  description: "Send us a detailed message",
-  primary: "19rjose@thelangton.org.uk",
-  secondary: "info@stmarys.com",
-  color: "violet",
-  available: "Response within 24hrs",
-},
+    {
+      icon: Mail,
+      title: "Email Support",
+      description: "Send us a detailed message",
+      primary: "19rjose@thelangton.org.uk",
+      secondary: "info@stmarys.com",
+      color: "violet",
+      available: "Response within 24hrs",
+    },
     {
       icon: MessageCircle,
       title: "Live Chat",
@@ -82,6 +115,13 @@ export default function ContactPage() {
       available: "Available 24/7",
     },
   ]
+
+  // Wrap cards with SmoothReveal and SmoothHover for animations
+  const AnimatedCard = ({ children, delay = 0 }: { children: React.ReactNode; delay?: number }) => (
+    <SmoothReveal delay={delay} direction="up" distance={30}>
+      <SmoothHover scale={1.02}>{children}</SmoothHover>
+    </SmoothReveal>
+  )
 
   const departments = [
     {
@@ -168,7 +208,12 @@ export default function ContactPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-zinc-100">
       {/* Header Section */}
-      <section className="relative py-16 px-4 bg-gradient-to-r from-slate-900 via-gray-900 to-zinc-900">
+      <section
+        ref={fadeInHeader.ref}
+        className={`relative py-16 px-4 bg-gradient-to-r from-slate-900 via-gray-900 to-zinc-900 transition-opacity duration-1000 ${
+          fadeInHeader.isVisible ? "opacity-100" : "opacity-0"
+        }`}
+      >
         <div className="absolute inset-0 bg-[url('/placeholder.svg?height=400&width=1200')] bg-cover bg-center opacity-10"></div>
         <div className="container mx-auto text-center relative z-10">
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-500/20 backdrop-blur-sm border border-emerald-500/30 mb-6">
@@ -196,7 +241,12 @@ export default function ContactPage() {
       </section>
 
       {/* Emergency Banner */}
-      <section className="px-4 py-6 bg-red-600">
+      <section
+        ref={fadeInEmergency.ref}
+        className={`px-4 py-6 bg-red-600 transition-opacity duration-1000 ${
+          fadeInEmergency.isVisible ? "opacity-100" : "opacity-0"
+        }`}
+      >
         <div className="container mx-auto">
           <Alert className="border-red-400 bg-red-50 max-w-4xl mx-auto">
             <AlertTriangle className="h-5 w-5 text-red-600" />
@@ -209,7 +259,12 @@ export default function ContactPage() {
       </section>
 
       {/* Contact Methods Grid */}
-      <section className="py-16 px-4">
+      <section
+        ref={fadeInContactMethods.ref}
+        className={`py-16 px-4 transition-opacity duration-1000 ${
+          fadeInContactMethods.isVisible ? "opacity-100" : "opacity-0"
+        }`}
+      >
         <div className="container mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">How Can We Help You?</h2>
@@ -248,7 +303,12 @@ export default function ContactPage() {
       </section>
 
       {/* Contact Form & Info */}
-      <section className="py-16 px-4 bg-white">
+      <section
+        ref={fadeInForm.ref}
+        className={`py-16 px-4 bg-white transition-opacity duration-1000 ${
+          fadeInForm.isVisible ? "opacity-100" : "opacity-0"
+        }`}
+      >
         <div className="container mx-auto">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
             {/* Contact Form */}
@@ -402,7 +462,12 @@ export default function ContactPage() {
             </div>
 
             {/* Contact Information Sidebar */}
-            <div className="space-y-6">
+            <div
+              ref={fadeInSidebar.ref}
+              className={`space-y-6 transition-opacity duration-1000 ${
+                fadeInSidebar.isVisible ? "opacity-100" : "opacity-0"
+              }`}
+            >
               <Card className="shadow-lg border-0">
                 <CardHeader className="bg-gradient-to-br from-emerald-50 to-teal-50">
                   <CardTitle className="flex items-center gap-2 text-emerald-800">
@@ -486,7 +551,12 @@ export default function ContactPage() {
       </section>
 
       {/* Department Directory */}
-      <section className="py-16 px-4 bg-gradient-to-br from-slate-50 to-gray-100">
+      <section
+        ref={fadeInDepartments.ref}
+        className={`py-16 px-4 bg-gradient-to-br from-slate-50 to-gray-100 transition-opacity duration-1000 ${
+          fadeInDepartments.isVisible ? "opacity-100" : "opacity-0"
+        }`}
+      >
         <div className="container mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">Department Directory</h2>
@@ -546,7 +616,12 @@ export default function ContactPage() {
       </section>
 
       {/* Locations */}
-      <section className="py-16 px-4 bg-white">
+      <section
+        ref={fadeInLocations.ref}
+        className={`py-16 px-4 bg-white transition-opacity duration-1000 ${
+          fadeInLocations.isVisible ? "opacity-100" : "opacity-0"
+        }`}
+      >
         <div className="container mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-3xl font-bold text-gray-900 mb-4">Visit Our Locations</h2>
@@ -559,7 +634,7 @@ export default function ContactPage() {
             {locations.map((location, index) => (
               <Card key={index} className="shadow-xl border-0 hover:shadow-2xl transition-shadow duration-300">
                 <CardHeader className="bg-gradient-to-r from-slate-50 to-gray-50">
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-slate-800">
                     <Building className="h-5 w-5 text-slate-600" />
                     {location.name}
                   </CardTitle>

@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, Suspense } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -11,7 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Label } from "@/components/ui/label"
 import { Loader2, Shield, CheckCircle, AlertCircle } from "lucide-react"
 
-export default function TwoFAVerify() {
+function TwoFAVerifyContent() {
   const [token, setToken] = useState("")
   const [message, setMessage] = useState("")
   const [loading, setLoading] = useState(false)
@@ -198,5 +198,13 @@ export default function TwoFAVerify() {
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function TwoFAVerify() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <TwoFAVerifyContent />
+    </Suspense>
   )
 }

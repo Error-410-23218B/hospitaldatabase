@@ -39,6 +39,8 @@ function ThemeWrapper({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+import Chatbot from "./components/chatbot-widget";
+
 export default function RootLayout({
   children,
 }: {
@@ -51,6 +53,7 @@ export default function RootLayout({
           <ThemeWrapper>
             <Header />
             {children}
+            <Chatbot />
           </ThemeWrapper>
         </AuthProvider>
       </body>
